@@ -51,6 +51,7 @@ if (results) {
       `  parts ${r.parts}  height ${r.height} m  mass ${r.massT} t  TWR ${r.twr}`,
     );
     console.log(`  stage Δv ${JSON.stringify(r.stageDv)}  total ${r.totalDv} m/s`);
+    if (r.deployables) console.log(`  deployables: ${r.deployables}`);
     console.log(`  launchable: ${r.launchable}`);
     if (r.warnings.length) console.log(`  warnings: ${r.warnings.join(' | ')}`);
     console.log(

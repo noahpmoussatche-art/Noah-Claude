@@ -18,6 +18,7 @@ import { MissionState } from '../src/data/constants';
 
 interface Result {
   mission: string;
+  deployables?: string;
   parts: number;
   height: number;
   massT: number;
@@ -56,6 +57,13 @@ function flyMission(missionId: string): Result {
 
   const mp = vehicle.massProperties();
   const dv = stageDeltaV(vehicle);
+
+  // Deployable hardware the animation drives. A count of zero means the 3D
+  // model exists but nothing will ever unhide it — invisible in a physics-only
+  // run, and on screen a parachute that never appears.
+  const deployables =
+    `chutes ${vehicle.chuteCanopies.length} legs ${vehicle.legPivots.length} ` +
+    `panels ${vehicle.panelHinges.length} fairings ${vehicle.fairingHalves.length}`;
 
   sim.beginCountdown(true);
 
@@ -115,6 +123,7 @@ function flyMission(missionId: string): Result {
 
   const result: Result = {
     mission: mission.name,
+    deployables,
     parts: vehicle.parts.length,
     height: Number(vehicle.height.toFixed(1)),
     massT: Number((mp.totalMass / 1000).toFixed(1)),
