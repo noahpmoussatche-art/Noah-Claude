@@ -557,6 +557,12 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
   const vehicle = (): THREE.Vector3 => scene.vehicleCentre(new THREE.Vector3());
   const vehicleMid = vehicle;
 
+  /** The vehicle's own up axis in world space — the direction a chute rides up. */
+  const chuteUp = (): THREE.Vector3 =>
+    new THREE.Vector3(0, 1, 0).applyQuaternion(
+      scene.sim.vehicle.root.getWorldQuaternion(new THREE.Quaternion()),
+    );
+
   const unsubscribe = sim.on((e) => {
     switch (e.type) {
       case 'mars-approach':
@@ -618,11 +624,19 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
           // distance the camera has actually managed to reach.
           kind: 'tracking',
           target: vehicleMid,
-          lookAt: () => vehicleMid().add(new THREE.Vector3(0, CHUTE_RISE * 0.5, 0)),
+          // Along the *vehicle's* up axis, not the world's. The chute is mounted
+          // on the vehicle, so the canopy rides up its own centre line — and
+          // during descent the vehicle is tilted, which is why aiming straight
+          // up left the suspension lines running out of the top-left corner
+          // with the dome nowhere in frame.
+          lookAt: () => vehicleMid().addScaledVector(chuteUp(), CHUTE_RISE * 0.55),
           position: () => vehicleMid().add(new THREE.Vector3(62, 52, 74)),
-          fov: 52,
+          fov: 54,
           blend: 0.5,
-          stiffness: 2.6,
+          // Loose, for the same reason the landing camera needed loosening: a
+          // stiff follow on a fast-descending subject never reaches its
+          // stand-off, and this shot was arriving at 26 m of its nominal 110.
+          stiffness: 0.9,
           handheld: 0.35,
         });
         break;

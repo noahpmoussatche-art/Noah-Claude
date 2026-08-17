@@ -164,14 +164,20 @@ export class MenuScene {
     // The pilot keeps looking up at the vehicle; the engineer glances between
     // the vehicle and their colleague, which is enough to read as a scene with
     // two people in it rather than two props.
-    // The pilot watches the vehicle; the engineer glances between the vehicle
-    // and their colleague. Only their heads move, so both faces stay readable.
-    this.crew.pilot.lookAt(new THREE.Vector3(1.6, 26, -58));
+    // Both look at things on the camera's side of them.
+    //
+    // The bill and eyes sit at local +Z and the bodies are already turned that
+    // way, so the bodies were never the problem: pointing `lookAt` at the
+    // vehicle — which stands *behind* the crew — swung both heads a full half
+    // turn and presented the backs of their heads to the audience. The vehicle
+    // is in frame regardless; they do not have to be staring at it.
+    const cam = this.cameraPosition(new THREE.Vector3());
+    this.crew.pilot.lookAt(cam);
     const glance = Math.sin(this.time * 0.31) > 0;
     this.crew.engineer.lookAt(
       glance
         ? this.crew.pilot.object.getWorldPosition(new THREE.Vector3())
-        : new THREE.Vector3(1.6, 18, -58),
+        : cam,
     );
 
     this.crew.engineer.update(dt);
