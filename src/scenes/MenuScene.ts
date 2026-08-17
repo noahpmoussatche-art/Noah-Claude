@@ -65,11 +65,13 @@ export class MenuScene {
     // ---- The two characters, centre frame ----
     // Turned toward the camera in three-quarter view. The title screen has to
     // introduce the two characters, and a shot of the backs of their heads
-    // introduces nobody — they look up at the vehicle with their heads, not by
-    // turning their whole bodies away from the audience.
+    // introduces nobody. `placeAt`'s facing is the body yaw and zero points at
+    // +Z, which is where the camera stands; `lookAt` only drives head and neck,
+    // so they can keep watching the vehicle behind them without turning their
+    // bodies away from the audience.
     this.crew = createCrew();
-    this.crew.engineer.placeAt(-0.42, 0, 2.6, Math.PI * 0.86);
-    this.crew.pilot.placeAt(0.44, 0, 2.35, Math.PI * 1.14);
+    this.crew.engineer.placeAt(-0.42, 0, 2.6, 0.34);
+    this.crew.pilot.placeAt(0.44, 0, 2.35, -0.26);
     this.crew.engineer.setPose('inspect');
     this.crew.pilot.setPose('look-up');
     this.scene.add(this.crew.engineer.object, this.crew.pilot.object);
@@ -162,12 +164,14 @@ export class MenuScene {
     // The pilot keeps looking up at the vehicle; the engineer glances between
     // the vehicle and their colleague, which is enough to read as a scene with
     // two people in it rather than two props.
-    this.crew.pilot.lookAt(new THREE.Vector3(1.6, 30, -58));
+    // The pilot watches the vehicle; the engineer glances between the vehicle
+    // and their colleague. Only their heads move, so both faces stay readable.
+    this.crew.pilot.lookAt(new THREE.Vector3(1.6, 26, -58));
     const glance = Math.sin(this.time * 0.31) > 0;
     this.crew.engineer.lookAt(
       glance
-        ? new THREE.Vector3(1.6, 22, -58)
-        : this.crew.pilot.object.getWorldPosition(new THREE.Vector3()),
+        ? this.crew.pilot.object.getWorldPosition(new THREE.Vector3())
+        : new THREE.Vector3(1.6, 18, -58),
     );
 
     this.crew.engineer.update(dt);
