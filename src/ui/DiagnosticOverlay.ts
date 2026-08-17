@@ -97,7 +97,6 @@ export class DiagnosticOverlay {
   constructor(vehicle: Vehicle) {
     this.group.name = 'diagnostics';
     this.group.visible = false;
-    // Diagnostics draw over the vehicle rather than being hidden inside it.
     this.group.renderOrder = 40;
 
     const scale = Math.max(vehicle.maxDiameter * 0.16, 0.35);
@@ -153,6 +152,29 @@ export class DiagnosticOverlay {
       new THREE.LineBasicMaterial({ color: 0x35b6ea, transparent: true, opacity: 0.55 }),
     );
     this.trajectory.frustumCulled = false;
+
+    this.makeGizmosDrawThrough();
+  }
+
+  /**
+   * Diagnostic markers sit *inside* the vehicle they describe — the centre of
+   * mass is by definition somewhere in the middle of the hull. Depth testing is
+   * therefore disabled across the whole overlay so the gizmos read through the
+   * structure, which is the entire point of a diagnostic view.
+   */
+  private makeGizmosDrawThrough(): void {
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh | THREE.Line;
+      const mat = (m as THREE.Mesh).material;
+      if (!mat) return;
+      for (const material of Array.isArray(mat) ? mat : [mat]) {
+        material.depthTest = false;
+        material.depthWrite = false;
+        material.transparent = true;
+        material.needsUpdate = true;
+      }
+      o.renderOrder = 40;
+    });
   }
 
   /** The trajectory line lives in world space, so it is added separately. */

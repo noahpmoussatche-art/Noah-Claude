@@ -414,8 +414,15 @@ export class Vehicle {
     //
     //  * A deployed parachute pulls from a canopy far above the vehicle, which
     //    is what makes a lander hang upright under it.
+    // Only counts once the aeroshell is actually exposed. Inside the fairing it
+    // sees no airflow at all, so letting it dictate the aerodynamic centre
+    // during ascent would report a perfectly sound launch vehicle as wildly
+    // unstable.
     const aeroshell = parts.some(
-      (p) => !p.jettisoned && (p.def.thermal?.coverage ?? 0) >= 1,
+      (p) =>
+        !p.jettisoned &&
+        (p.def.thermal?.coverage ?? 0) >= 1 &&
+        !(p.shielded && this.fairingAttached),
     );
     if (this.chuteDeployment > 0.2) {
       centreOfPressure = centreOfMass
