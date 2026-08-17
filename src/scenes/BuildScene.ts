@@ -98,6 +98,11 @@ export class BuildScene {
     this.diagnostics?.setEnabled(on);
   }
 
+  /** Height of the vehicle currently on the stand, metres. */
+  get vehicleHeight(): number {
+    return this.vehicle?.height ?? 12;
+  }
+
   /** Point the camera should frame: the middle of the vehicle. */
   focusPoint(target = new THREE.Vector3()): THREE.Vector3 {
     if (!this.vehicle) return target.copy(this.workshop.assemblyPoint).setY(8);

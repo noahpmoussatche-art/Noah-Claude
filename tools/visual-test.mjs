@@ -242,26 +242,45 @@ async function main() {
   await page.waitForTimeout(4000);
   await shot('entry', 'Atmospheric entry — plasma');
 
-  // Entry, descent and landing run at real time by design, and this browser
-  // renders the Martian scene at a couple of frames a second — so the mission
-  // clock crawls against the wall clock here. A modest warp keeps the pass to a
-  // sane length without skipping the beats being photographed.
-  await setWarp('5×');
+  // Entry, descent and landing are photographed by altitude, not by phase name.
+  // The phases here are short and this browser polls slowly, so waiting on the
+  // HUD text raced straight past the parachute and the landing burn — the run
+  // reached MISSION COMPLETE with neither captured. Altitude is monotonic and
+  // says exactly where the vehicle is.
+  const marsAltitude = async () =>
+    page.evaluate(() => {
+      const d = window.orbital?.debugSnapshot?.();
+      return d && d.mode === 'mars' ? d.altitude : null;
+    });
 
-  console.log('  waiting for DESCENT…');
-  console.log('  phase:', await waitForPhase(['DESCENT'], 420_000));
+  const waitForAltitudeBelow = async (metres, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const a = await marsAltitude();
+      if (a !== null && a <= metres) return a;
+      // Landed already, or the run failed out of the Martian scene.
+      const p = await phase();
+      if (p.includes('LANDED') || p.includes('COMPLETE') || p.includes('FAILURE')) return null;
+      await page.waitForTimeout(300);
+    }
+    return `TIMEOUT`;
+  };
+
+  // Warp through the long ballistic part of entry, then back to real time for
+  // everything that is meant to be watched.
+  await setWarp('5×');
+  console.log('  descending…', await waitForAltitudeBelow(20_000, 420_000));
   await setWarp('1×');
-  await page.waitForTimeout(2500);
+
+  console.log('  chute altitude:', await waitForAltitudeBelow(7_000, 420_000));
   await shot('descent', 'Descent under parachute');
 
-  console.log('  waiting for LANDING…');
-  console.log('  phase:', await waitForPhase(['LANDING'], 420_000));
-  await page.waitForTimeout(2000);
+  console.log('  burn altitude:', await waitForAltitudeBelow(400, 420_000));
   await shot('landing', 'Powered descent and dust');
 
   console.log('  waiting for LANDED…');
-  console.log('  phase:', await waitForPhase(['LANDED', 'COMPLETE'], 420_000));
-  await page.waitForTimeout(3000);
+  console.log('  phase:', await waitForPhase(['LANDED', 'COMPLETE'], 300_000));
+  await page.waitForTimeout(6000);
   await shot('landed', 'On the surface');
 
   await page.waitForTimeout(12000);

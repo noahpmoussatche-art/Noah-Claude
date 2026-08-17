@@ -919,6 +919,11 @@ body.cinematic .hud-hideable {
   color: var(--osa-fail);
 }
 
+/* Aerodynamic rows outside the atmosphere: shown, but not asserted. */
+.diag-row .v.muted {
+  color: var(--osa-text-dim);
+}
+
 .diag-legend {
   margin-top: 10px;
   padding-top: 9px;

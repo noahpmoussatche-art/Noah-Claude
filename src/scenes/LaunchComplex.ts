@@ -50,8 +50,12 @@ export function buildLaunchComplex(seed = 4242): LaunchComplexRefs {
   // -------------------------------------------------------------------------
   // Terrain apron
   // -------------------------------------------------------------------------
+  // 1.6 km was enough from the ground and not from the air: by three kilometres
+  // up the site read as a grey disc floating in an orange sky. At twenty-five
+  // kilometres the fog closes long before the edge does, in every shot the
+  // launch site appears in.
   const ground = mesh(
-    new THREE.CircleGeometry(1_600, 64),
+    new THREE.CircleGeometry(25_000, 72),
     new THREE.MeshStandardMaterial({ color: 0x6d7359, roughness: 1, metalness: 0 }),
     false,
     true,

@@ -208,15 +208,26 @@ export class Game {
     // fence of structural steel. This viewpoint is in the aisle, and the lens
     // is wide enough to hold a tall stack from a distance the walls allow.
     const focus = this.buildScene.focusPoint(new THREE.Vector3());
+    const distance = this.buildScene.framingDistance();
+    // The lens has to make up for the room: since the camera cannot back away
+    // far enough, widen it until the stack fits from where it can stand.
+    const fov = clamp(
+      THREE.MathUtils.radToDeg(
+        2 * Math.atan((this.buildScene.vehicleHeight * 0.55) / distance),
+      ),
+      38,
+      68,
+    );
     this.director.setClipRange(0.35, 12_000);
     this.director.snapTo(
-      focus.clone().add(new THREE.Vector3(19, 9, 39)),
+      focus.clone().add(new THREE.Vector3(0.45, 0.2, 0.87).normalize().multiplyScalar(distance)),
       focus,
-      54,
+      fov,
     );
+    this.director.setFreeFov(fov);
     this.director.enterFreeCamera(
       () => this.buildScene!.focusPoint(new THREE.Vector3()),
-      this.buildScene.framingDistance(),
+      distance,
     );
 
     this.refreshAnalysis();
@@ -297,9 +308,21 @@ export class Game {
     this.buildScene?.setDiagnosticsEnabled(this.diagnosticsOn);
     this.refreshAnalysis();
 
-    // Re-frame for the new vehicle size, so a growing stack stays in shot.
+    // Re-frame for the new vehicle size, so a growing stack stays in shot. The
+    // bay caps how far back the camera can go, so past a certain height the
+    // lens has to widen instead of the camera retreating.
     if (this.buildScene) {
-      this.director.setOrbitDistance(this.buildScene.framingDistance());
+      const distance = this.buildScene.framingDistance();
+      this.director.setOrbitDistance(distance);
+      this.director.setFreeFov(
+        clamp(
+          THREE.MathUtils.radToDeg(
+            2 * Math.atan((this.buildScene.vehicleHeight * 0.55) / distance),
+          ),
+          38,
+          68,
+        ),
+      );
     }
     this.ui.updateTutorial(this.tutorial, this.tutorialContext());
   }

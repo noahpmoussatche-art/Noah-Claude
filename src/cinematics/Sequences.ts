@@ -73,11 +73,23 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
   const crewMid = (): THREE.Vector3 =>
     engineerPos().add(pilotPos()).multiplyScalar(0.5);
 
-  // Where the ducks start (off at the perimeter) and where they walk to.
-  const startA = new THREE.Vector3(46, pad.y, 40);
-  const startB = new THREE.Vector3(49, pad.y, 43);
-  const markA = new THREE.Vector3(17, pad.y, 21);
-  const markB = new THREE.Vector3(19.8, pad.y, 23);
+  // Where the ducks start and where they walk to.
+  //
+  // Two constraints set these. A duck walks at about a metre a second and the
+  // walk has six seconds of screen time, so it covers six metres — set further
+  // out, the crew were still forty metres from the vehicle when the shot that
+  // is supposed to sell its scale came up. And every mark has to be on the pad
+  // deck, which is an octagon thirty metres across at eight and a half metres
+  // up: a mark outside it left the ducks walking through mid-air.
+  const inward = new THREE.Vector3(0.588, 0, 0.809);
+  const across = new THREE.Vector3(0.809, 0, -0.588);
+  const deckMark = (radius: number, side: number): THREE.Vector3 =>
+    inward.clone().multiplyScalar(radius).addScaledVector(across, side).setY(pad.y);
+
+  const startA = deckMark(26, 0);
+  const startB = deckMark(26, 3);
+  const markA = deckMark(20, 0);
+  const markB = deckMark(20, 3);
 
   // ---- 0s: black, then fade up on the spaceport at dawn ----
   tl.at(0, () => {

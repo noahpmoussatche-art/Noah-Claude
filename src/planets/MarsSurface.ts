@@ -20,6 +20,13 @@ import { softParticle } from '../render/textures';
 
 export interface MarsTerrainRefs {
   readonly root: THREE.Group;
+  /**
+   * Everything that makes up the ground: the detailed patch, the far field, the
+   * distant relief, the boulders and the horizon haze. Grouped so the whole
+   * surface can be swapped for the orbital globe in one move, high up where the
+   * patch is a speck.
+   */
+  readonly ground: THREE.Group;
   /** Samples ground elevation at a world XZ position, metres. */
   readonly heightAt: (x: number, z: number) => number;
   /** Ambient wind-blown dust. */
@@ -160,8 +167,12 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
 
   const terrainMat = Materials.regolith();
   (terrainMat.map as THREE.Texture).repeat.set(180, 180);
+  const ground = new THREE.Group();
+  ground.name = 'mars-ground';
+  root.add(ground);
+
   const terrain = mesh(geo, terrainMat, false, true);
-  root.add(terrain);
+  ground.add(terrain);
 
   // -------------------------------------------------------------------------
   // Far field: a coarse annulus carrying the same height function out to the
@@ -173,7 +184,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   // there a 9 km patch reads as a square plate floating in the sky. The far
   // field costs one coarse mesh and turns that plate back into a planet.
   // -------------------------------------------------------------------------
-  root.add(buildFarField(heightAt, lowColor, midColor, darkColor, detail));
+  ground.add(buildFarField(heightAt, lowColor, midColor, darkColor, detail));
 
   // -------------------------------------------------------------------------
   // Distant relief: a ring of mesas and mountains beyond the terrain patch, so
@@ -207,13 +218,13 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
     false,
     false,
   );
-  root.add(distantMesh);
+  ground.add(distantMesh);
 
   // -------------------------------------------------------------------------
   // Boulders and rock fields, instanced for performance (spec §73)
   // -------------------------------------------------------------------------
-  root.add(buildRockField(heightAt, rng, 1_400, 'small'));
-  root.add(buildRockField(heightAt, rng, 260, 'large'));
+  ground.add(buildRockField(heightAt, rng, 1_400, 'small'));
+  ground.add(buildRockField(heightAt, rng, 260, 'large'));
 
   // -------------------------------------------------------------------------
   // Wind-blown dust
@@ -251,7 +262,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   );
   haze.position.y = 420;
   haze.renderOrder = -1;
-  root.add(haze);
+  ground.add(haze);
 
   // -------------------------------------------------------------------------
   // Lighting (spec §57): a small, distant, weak sun and dusty sky bounce
@@ -274,7 +285,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   const ambient = new THREE.HemisphereLight(0xd9a172, 0x6b3a22, 0.72);
   root.add(ambient);
 
-  return { root, heightAt, dust, sky, sunLight, ambient };
+  return { root, ground, heightAt, dust, sky, sunLight, ambient };
 }
 
 /** Updates the ambient dust drift. Call each frame while on Mars. */
@@ -463,6 +474,7 @@ function buildMarsSky(): THREE.Mesh {
       uZenith: { value: new THREE.Color(0x8e6444) },
       uHorizon: { value: new THREE.Color(0xd9a473) },
       uSunGlow: { value: new THREE.Color(0x9fb8d4) },
+      uOpacity: { value: 1 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -477,6 +489,7 @@ function buildMarsSky(): THREE.Mesh {
       uniform vec3 uZenith;
       uniform vec3 uHorizon;
       uniform vec3 uSunGlow;
+      uniform float uOpacity;
 
       void main() {
         float h = clamp(vDir.y * 1.35, -0.2, 1.0);
@@ -490,11 +503,12 @@ function buildMarsSky(): THREE.Mesh {
         // Darken below the horizon so the sky does not glow under the terrain.
         color *= mix(0.55, 1.0, smoothstep(-0.15, 0.06, vDir.y));
 
-        gl_FragColor = vec4(color, 1.0);
+        gl_FragColor = vec4(color, uOpacity);
       }
     `,
     side: THREE.BackSide,
     depthWrite: false,
+    transparent: true,
     fog: false,
   });
 

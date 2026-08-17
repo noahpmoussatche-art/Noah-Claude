@@ -43,14 +43,23 @@ export type SceneMode = 'launch-site' | 'cruise' | 'mars';
 const FAR_SPACE_SCALE = 1 / 2_000;
 
 /** Altitude at which the sky dome gives way to the planet, metres. */
-const FAR_EARTH_ALTITUDE = 55_000;
+const FAR_EARTH_ALTITUDE = 40_000;
 
 /**
- * Altitude at which the Martian render frame locks to the landing site even if
- * the parachute has not reported deploying, metres. The frame must be anchored
- * well before touchdown or the ground under the lander is the wrong ground.
+ * Altitude at which the Martian render frame stops following the vehicle and
+ * locks to the landing site, metres.
+ *
+ * Low, and deliberately so. Locking at parachute deploy sounds right and is
+ * not: from eleven kilometres the vehicle still flies nearly forty kilometres
+ * downrange, which put the touchdown far outside the detailed terrain patch and
+ * left the lander standing on the coarse far field. By two kilometres the
+ * landing burn has taken out most of the horizontal drift, so what remains fits
+ * comfortably inside the patch.
  */
-const MARS_FRAME_LOCK_ALTITUDE = 14_000;
+const MARS_FRAME_LOCK_ALTITUDE = 2_000;
+
+/** Altitude above Mars at which the globe replaces the sky dome, metres. */
+const FAR_MARS_ALTITUDE = 20_000;
 
 /** Body disc radius in the cruise map, as a fraction of the astronomical unit. */
 const CRUISE_BODY_SCALE = 0.042;
@@ -112,8 +121,11 @@ export class MissionScene {
   private marsOrigin = new THREE.Vector3();
   private marsOriginLocked = false;
 
-  /** Orbital Earth, drawn in the renderer's far-space pass. */
+  /** Planets drawn in the renderer's far-space pass, one per world. */
   private farEarth: THREE.Group | null = null;
+  private farGlobe: THREE.Group | null = null;
+  private farMars: THREE.Group | null = null;
+  private farMarsGlobe: THREE.Group | null = null;
 
   private cameraPosition = new THREE.Vector3();
   private supersonicFired = false;
@@ -496,7 +508,7 @@ export class MissionScene {
     if (altitude > FAR_EARTH_ALTITUDE * 0.75) this.ensureFarEarth();
     if (this.farEarth) {
       this.farEarth.visible = altitude > FAR_EARTH_ALTITUDE;
-      this.farEarth.rotation.y += dt * 7.3e-5;
+      this.positionFarPlanet(this.farEarth, this.farGlobe!, EARTH.radius, altitude);
     }
     // The dome dissolves as the planet takes over, rather than cutting: it is
     // opaque, so left on it would simply paint over the Earth behind it.
@@ -504,7 +516,9 @@ export class MissionScene {
     this.sky.mesh.visible = altitude < FAR_EARTH_ALTITUDE * 0.72 + 18_000;
     this.syncStarfield();
     if (this.scene.fog instanceof THREE.FogExp2) {
-      this.scene.fog.density = lerp(0.00042, 0, clamp(altitude / 30_000, 0, 1));
+      // Held on until the planet takes over, because it is also what keeps the
+      // edge of the launch site's ground from showing against the sky.
+      this.scene.fog.density = lerp(0.00042, 0, clamp(altitude / 46_000, 0, 1));
     }
 
     // Keep the shadow camera following the vehicle so shadows stay crisp.
@@ -633,14 +647,11 @@ export class MissionScene {
 
     const altitude = flight.altitude();
 
-    // Lock the render frame once the parachute is out — or, failing that, once
-    // the vehicle is low enough that the ground has to be right. Until then the
-    // frame follows the vehicle, keeping it over the middle of the patch.
+    // Lock the render frame close to the ground. Until then it follows the
+    // vehicle, which keeps it over the middle of the terrain patch.
     if (!this.marsOriginLocked) {
       this.marsOrigin.set(this._v.x, 0, this._v.z);
-      if (sim.deployment.chute > 0.05 || altitude < MARS_FRAME_LOCK_ALTITUDE) {
-        this.marsOriginLocked = true;
-      }
+      if (altitude < MARS_FRAME_LOCK_ALTITUDE) this.marsOriginLocked = true;
     }
     const localX = this._v.x - this.marsOrigin.x;
     const localZ = this._v.z - this.marsOrigin.z;
@@ -680,6 +691,28 @@ export class MissionScene {
       sim.telemetry.airspeed,
       Math.max(this.sim.vehicle.maxDiameter / 2, 1),
     );
+
+    // ---- The planet itself, above the height where the terrain patch reads ----
+    // Entry interface is over a hundred kilometres up. From there the nine
+    // kilometre terrain patch is a speck and the sky dome is an opaque
+    // butterscotch wall, which is how entry came out as a flat brown card. Above
+    // twenty kilometres the globe takes over and the dome dissolves into it.
+    if (altitude > FAR_MARS_ALTITUDE * 0.7) this.ensureFarMars();
+    if (this.farMars && this.farMarsGlobe) {
+      this.farMars.visible = altitude > FAR_MARS_ALTITUDE;
+      this.positionFarPlanet(this.farMars, this.farMarsGlobe, MARS.radius, altitude);
+    }
+    const skyMat = mars.sky.material as THREE.ShaderMaterial;
+    skyMat.uniforms.uOpacity.value = 1 - clamp((altitude - FAR_MARS_ALTITUDE * 0.7) / 9_000, 0, 1);
+    mars.sky.visible = skyMat.uniforms.uOpacity.value > 0.01;
+
+    // The two representations of the same ground swap at one threshold rather
+    // than overlapping: below it the terrain patch is what you are landing on,
+    // above it the globe is what you are falling toward.
+    const onTerrain = altitude < FAR_MARS_ALTITUDE;
+    mars.ground.visible = onTerrain;
+    this.starfield.visible = !onTerrain;
+    this.syncStarfield();
 
     // The plasma also lights the vehicle and the ground below it.
     mars.sunLight.intensity = 1.55;
@@ -839,6 +872,35 @@ export class MissionScene {
   }
 
   /**
+   * Places the orbital Earth under the vehicle.
+   *
+   * The world is a plane tangent to the surface at the launch site, and by
+   * insertion the vehicle is four thousand kilometres downrange — far enough
+   * that the plane has parted company with the planet by fifteen hundred
+   * kilometres. Anchoring the globe to the world origin therefore put the
+   * camera *inside* it. So the planet is hung beneath the vehicle instead, one
+   * radius plus the current altitude straight down, which is what "below" means
+   * where the vehicle actually is: the horizon then falls at the angle the
+   * altitude says it should. The surface still slides past, because the globe is
+   * spun by the distance flown over it rather than being carried along rigidly.
+   */
+  private positionFarPlanet(
+    group: THREE.Group,
+    globe: THREE.Group,
+    planetRadius: number,
+    altitude: number,
+  ): void {
+    const v = this.sim.vehicle.root.position;
+    group.position
+      .set(v.x, v.y - planetRadius - altitude, v.z)
+      .multiplyScalar(FAR_SPACE_SCALE);
+
+    // Ground track: rotate the globe by the angle actually flown over it, so
+    // the surface moves under the vehicle at orbital speed.
+    globe.rotation.set(0, 0, -this.sim.telemetry.downrange / planetRadius);
+  }
+
+  /**
    * Reduction factor for the renderer's far-space pass.
    *
    * The pass always runs — it is what draws the stars, which have to sit behind
@@ -847,7 +909,7 @@ export class MissionScene {
    * something the size of a rocket.
    */
   farSpaceScale(): number {
-    if (this.farEarth?.visible) return FAR_SPACE_SCALE;
+    if (this.farEarth?.visible || this.farMars?.visible) return FAR_SPACE_SCALE;
     // Unscaled when only the stars need it, and skipped altogether when there
     // is nothing on the far layer to draw — the pass costs a full scene
     // traversal, and at the pad and on the ground it would draw nothing.
@@ -862,28 +924,44 @@ export class MissionScene {
    */
   private ensureFarEarth(): void {
     if (this.farEarth) return;
+    const built = this.buildFarPlanet('earth', EARTH.radius, new THREE.Vector3(0.55, 0.34, -0.76));
+    this.farEarth = built.group;
+    this.farGlobe = built.globe;
+  }
 
+  private ensureFarMars(): void {
+    if (this.farMars) return;
+    const built = this.buildFarPlanet('mars', MARS.radius, new THREE.Vector3(-0.6, 0.55, 0.36));
+    this.farMars = built.group;
+    this.farMarsGlobe = built.globe;
+  }
+
+  /** Shared construction for the far-space planets. */
+  private buildFarPlanet(
+    kind: 'earth' | 'mars',
+    radius: number,
+    sunDirection: THREE.Vector3,
+  ): { group: THREE.Group; globe: THREE.Group } {
     const group = new THREE.Group();
-    group.name = 'far-earth';
+    group.name = `far-${kind}`;
 
-    const globe = buildPlanetGlobe(EARTH.radius * FAR_SPACE_SCALE, 'earth', 7);
-    // The launch site is the world origin and sits on the surface, so the
-    // planet's centre is one radius straight down.
-    globe.position.y = -EARTH.radius * FAR_SPACE_SCALE;
+    // The globe sits at the group's origin; the group *is* the planet's centre
+    // and is placed every frame (see positionFarPlanet).
+    const globe = buildPlanetGlobe(radius * FAR_SPACE_SCALE, kind, kind === 'earth' ? 7 : 23);
     group.add(globe);
 
-    // The far pass collects only lights that share its layer, so the planet
-    // needs its own sun. Same direction as the one lighting the vehicle.
-    const sun = new THREE.DirectionalLight(0xfff4e2, 3.6);
-    sun.position.copy(this.sunLight.position).normalize().multiplyScalar(1e5);
+    // The far pass collects only lights that share its layer, so each planet
+    // needs its own sun, pointed the same way as the one lighting the vehicle.
+    const sun = new THREE.DirectionalLight(0xfff4e2, kind === 'earth' ? 3.6 : 2.4);
+    sun.position.copy(sunDirection).normalize().multiplyScalar(1e5);
     group.add(sun);
     group.add(sun.target);
-    group.add(new THREE.AmbientLight(0x2c3d55, 0.5));
+    group.add(new THREE.AmbientLight(kind === 'earth' ? 0x2c3d55 : 0x3a2418, 0.5));
 
     group.traverse((o) => o.layers.set(LAYER_FAR_SPACE));
     group.visible = false;
     this.scene.add(group);
-    this.farEarth = group;
+    return { group, globe };
   }
 
   dispose(): void {

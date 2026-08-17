@@ -808,22 +808,28 @@ export class Interface {
       this.diagnosticsPanel.appendChild(r);
     };
 
+    // Aerodynamic quantities only mean something where there is air. In vacuum
+    // a capsule trimmed to fly heat-shield-first reports a large negative static
+    // margin and a wild angle of attack, both of which are true and neither of
+    // which is a problem — so they are shown greyed rather than flagged red.
+    const inAir = sim.telemetry.dynamicPressure > 40;
+
     row('Centre of mass', `${mp.centreOfMass.y.toFixed(2)} m`);
     row('Centre of thrust', `${mp.centreOfThrust.y.toFixed(2)} m`);
-    row('Centre of pressure', `${mp.centreOfPressure.y.toFixed(2)} m`);
+    row('Centre of pressure', `${mp.centreOfPressure.y.toFixed(2)} m`, inAir ? '' : 'muted');
     row(
       'Static margin',
       `${mp.staticMargin.toFixed(2)} m`,
-      mp.staticMargin > 0 ? 'good' : 'bad',
+      !inAir ? 'muted' : mp.staticMargin > 0 ? 'good' : 'bad',
     );
     row(
       'Thrust offset',
       `${mp.thrustOffset.toFixed(3)} m`,
       mp.thrustOffset < 0.05 ? 'good' : 'bad',
     );
-    row('Angle of attack', `${sim.telemetry.angleOfAttack.toFixed(1)}°`);
+    row('Angle of attack', `${sim.telemetry.angleOfAttack.toFixed(1)}°`, inAir ? '' : 'muted');
     row('Flight path', `${sim.telemetry.flightPathAngle.toFixed(1)}°`);
-    row('Drag area', `${mp.dragArea.toFixed(1)} m²`);
+    row('Drag area', `${mp.dragArea.toFixed(1)} m²`, inAir ? '' : 'muted');
     row('Pitch inertia', `${(mp.inertia / 1e6).toFixed(1)} Mkg·m²`);
 
     const legend = el('div', 'diag-legend');

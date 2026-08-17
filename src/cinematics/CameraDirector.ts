@@ -99,6 +99,8 @@ export class CameraDirector {
   private orbitDistance = 60;
   private userControlled = false;
   private freeTarget: (() => THREE.Vector3) | null = null;
+  /** Lens the player's camera uses; set by whoever framed the scene. */
+  private freeFov = 45;
 
   /** Queue of shots to play in order. */
   private readonly queue: Shot[] = [];
@@ -234,7 +236,7 @@ export class CameraDirector {
         t.z + Math.cos(this.orbitYaw) * cp * this.orbitDistance,
       );
       idealLook = t;
-      idealFov = 45;
+      idealFov = this.freeFov;
       idealRoll = 0;
       stiffness = 9;
       handheld = 0.25;
@@ -315,6 +317,23 @@ export class CameraDirector {
 
     dampVec3(this.smoothPos, idealPos, stiffness, dt);
     dampVec3(this.smoothLook, idealLook, stiffness * 1.25, dt);
+
+    // A cut restarts the feed-forward, and under time warp a single frame can
+    // carry the subject kilometres — enough for the camera to arrive at the new
+    // shot already hopelessly behind, framing empty sky. So the lag is bounded
+    // by the shot's own scale: the camera may trail, but never by more than it
+    // stands back, which is the difference between a shot that breathes and one
+    // that has lost its subject.
+    const scale = Math.max(idealPos.distanceTo(idealLook), 1);
+    const lag = this._ff.subVectors(this.smoothPos, idealPos);
+    const maxLag = scale * 0.6;
+    if (lag.lengthSq() > maxLag * maxLag) {
+      this.smoothPos.copy(idealPos).addScaledVector(lag.normalize(), maxLag);
+    }
+    const lookLag = this._ff.subVectors(this.smoothLook, idealLook);
+    if (lookLag.lengthSq() > maxLag * maxLag) {
+      this.smoothLook.copy(idealLook).addScaledVector(lookLag.normalize(), maxLag);
+    }
     this.smoothFov = damp(this.smoothFov, idealFov, 5, dt);
     this.smoothRoll = damp(this.smoothRoll, idealRoll, 4, dt);
 
@@ -368,6 +387,11 @@ export class CameraDirector {
     this.camera.fov = fov;
     this.camera.lookAt(lookAt);
     this.camera.updateProjectionMatrix();
+  }
+
+  /** Sets the lens the player's free camera uses. */
+  setFreeFov(fov: number): void {
+    this.freeFov = fov;
   }
 
   /** Adjusts near/far planes for the scale of the current scene. */

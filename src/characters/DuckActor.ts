@@ -40,9 +40,9 @@ interface Personality {
 
 const PERSONALITIES: Record<DuckRole, Personality> = {
   // Deliberate, methodical, always double-checking something.
-  engineer: { walkSpeed: 0.62, tempo: 0.85, bounce: 0.7, fidgetInterval: 5.5 },
+  engineer: { walkSpeed: 0.9, tempo: 0.85, bounce: 0.7, fidgetInterval: 5.5 },
   // Quick, expressive, slightly too confident.
-  pilot: { walkSpeed: 0.82, tempo: 1.18, bounce: 1.25, fidgetInterval: 3.2 },
+  pilot: { walkSpeed: 1.12, tempo: 1.18, bounce: 1.25, fidgetInterval: 3.2 },
 };
 
 /** Display names for subtitles and dialogue (spec §61 — own identity). */
