@@ -82,10 +82,12 @@ const PLUME_VERTEX = /* glsl */ `
 
     // The cylinder's normal is radial, and stays very nearly so through the
     // deformation above, so it can be reused rather than recomputed.
+    // Called nrm rather than n: n is already the turbulence sample above, and
+    // shadowing a float with a vec3 makes the whole shader fail to compile.
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-    vec3 n = normalize(normalMatrix * normal);
+    vec3 nrm = normalize(normalMatrix * normal);
     vec3 viewDir = normalize(-mv.xyz);
-    vFacing = abs(dot(n, viewDir));
+    vFacing = abs(dot(nrm, viewDir));
 
     gl_Position = projectionMatrix * mv;
   }
