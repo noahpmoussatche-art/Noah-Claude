@@ -274,8 +274,12 @@ async function main() {
   console.log('  descending…', await waitForAltitudeBelow(20_000, 420_000));
   await setWarp('1×');
 
-  console.log('  chute altitude:', await waitForAltitudeBelow(7_000, 420_000));
-  await shot('descent', 'Descent under parachute');
+  // Below the altitude the canopy is actually open at. Deployment waits for
+  // Mach 2.3, which this vehicle does not reach until about 6.5 km — so a shot
+  // taken at 7 km catches a packed mortar can and an empty sky, which is
+  // exactly what it did.
+  console.log('  chute altitude:', await waitForAltitudeBelow(4_800, 420_000));
+  await shot('descent', 'Descent under an open parachute');
 
   console.log('  burn altitude:', await waitForAltitudeBelow(400, 420_000));
   await shot('landing', 'Powered descent and dust');

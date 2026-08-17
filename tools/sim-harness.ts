@@ -99,6 +99,20 @@ function flyMission(missionId: string): Result {
     // debugged from the numbers rather than guessed at.
     if (sim.marsFlight) {
       const a = sim.marsFlight.altitude();
+      // Canopy state while it should be flying the vehicle. Logged from the
+      // real objects, so "the chute is not on screen" can be told apart from
+      // "the chute is not where the camera is looking".
+      if (a > 3000 && a < 11_000 && lastLog - a > 900) {
+        lastLog = a;
+        const c = sim.vehicle.chuteCanopies[0];
+        descentLog.push(
+          c
+            ? `[chute] alt ${a.toFixed(0)}m deploy ${sim.deployment.chute.toFixed(2)} ` +
+              `visible ${c.visible} scale ${c.scale.x.toFixed(3)} ` +
+              `local y ${c.position.y.toFixed(2)} parentVisible ${c.parent?.visible}`
+            : `[chute] alt ${a.toFixed(0)}m — no canopy object`,
+        );
+      }
       if (a < 2500 && (lastLog - a > 40 || a < 60)) {
         lastLog = a;
         const thr = sim.vehicle
