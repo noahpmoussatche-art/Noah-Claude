@@ -1041,6 +1041,17 @@ export class MissionSim {
   private applyDeployments(): void {
     const d = this.deployment;
 
+    // Jettisoned hardware physically leaves. Its mass and drag were already
+    // taken off the vehicle; without this its geometry stayed bolted on, so an
+    // aeroshell that had been discarded at eleven kilometres was still riding
+    // the lander to the surface. Fairing halves are the exception until their
+    // swing-open animation has finished — that animation *is* them leaving.
+    for (const p of this.vehicle.parts) {
+      if (!p.object) continue;
+      if (!p.jettisoned) continue;
+      p.object.visible = p.def.enclosing ? d.fairing < 0.999 : false;
+    }
+
     // Fairing halves swing open on their base hinge, then translate away.
     for (let i = 0; i < this.vehicle.fairingHalves.length; i++) {
       const half = this.vehicle.fairingHalves[i];

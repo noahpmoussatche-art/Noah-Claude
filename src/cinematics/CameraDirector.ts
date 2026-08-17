@@ -41,6 +41,13 @@ export interface Shot {
   readonly fov?: number;
   /** Seconds the shot lasts. Infinity means hold until replaced. */
   readonly duration?: number;
+  /**
+   * Focal length as a function of shot time, degrees. A fixed lens cannot hold
+   * both a four-metre lander four hundred metres up and the horizon it is
+   * coming down to; a long lens that widens as the subject arrives can, and is
+   * what a real tracking camera on the ground does.
+   */
+  readonly fovAt?: (t: number) => number;
   /** Seconds to blend in from the previous shot. 0 is a hard cut. */
   readonly blend?: number;
   /** Camera roll, radians. */
@@ -246,7 +253,7 @@ export class CameraDirector {
       const evaluate = (shot: Shot, time: number) => ({
         pos: shot.position(time),
         look: (shot.lookAt ?? shot.target)(time),
-        fov: shot.fov ?? 45,
+        fov: shot.fovAt ? shot.fovAt(time) : (shot.fov ?? 45),
         roll: shot.roll ?? 0,
         stiffness: shot.stiffness ?? 6,
         handheld: shot.handheld ?? 0.4,

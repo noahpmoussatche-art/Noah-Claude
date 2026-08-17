@@ -617,34 +617,41 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         slate('HEAT SHIELD JETTISON', '');
         break;
 
-      case 'landing-burn':
+      case 'landing-burn': {
         audio.ignition();
         slate('POWERED DESCENT', '');
-        // From the surface, watching the lander come down on its engine — the
-        // shot that makes the landing feel like a landing.
-        //
-        // The burn starts around 900 m up, so a camera parked 30 m from the
-        // touchdown point would spend the whole descent pointing at empty sky.
-        // Instead it stands back roughly as far as the lander is high, which
-        // keeps the vehicle and the horizon in the same frame the whole way
-        // down, and closes to a low hero angle as the lander arrives.
+        // A tracking camera on the surface, on a long lens that opens up as the
+        // lander comes down. The burn starts around four hundred metres and the
+        // lander is four metres tall, so no fixed lens holds both it and the
+        // ground it is landing on: standing back far enough to see the horizon
+        // made the vehicle eight pixels, and standing close enough to see the
+        // vehicle pointed the camera at empty sky.
+        const standoff = 52;
+        const marker = vehicle();
+        const px = marker.x + standoff * 0.78;
+        const pz = marker.z + standoff * 0.62;
+        const py = scene.groundHeightAt(px, pz) + 2.4;
         director.play({
           kind: 'ground',
           target: vehicle,
-          fov: 36,
           blend: 1.0,
           stiffness: 2.2,
           handheld: 0.7,
-          position: () => {
+          position: () => new THREE.Vector3(px, py, pz),
+          fovAt: () => {
             const v = vehicle();
-            const alt = Math.max(sim.marsFlight?.altitude() ?? 0, 0);
-            const back = clamp(alt * 0.95, 38, 900);
-            const x = v.x + back * 0.78;
-            const z = v.z + back * 0.62;
-            return new THREE.Vector3(x, scene.groundHeightAt(x, z) + 2.4 + alt * 0.06, z);
+            const range = Math.max(v.distanceTo(new THREE.Vector3(px, py, pz)), 1);
+            // Frame about four vehicle lengths across, whatever the range.
+            const want = Math.max(scene.sim.vehicle.height, 6) * 2.2;
+            return clamp(
+              THREE.MathUtils.radToDeg(2 * Math.atan(want / range)),
+              9,
+              42,
+            );
           },
         });
         break;
+      }
 
       case 'legs-deploy':
         audio.servo(2.2);
