@@ -43,6 +43,24 @@ export class BuildScene {
     this.scene.add(this.crew.pilot.object);
 
     this.scene.background = new THREE.Color(0x141a22);
+
+    // ---- Lighting rig on the vehicle itself ----
+    // The bay's own lamps are up in the roof and the service platforms shadow
+    // most of the stack, which left the vehicle reading as a black silhouette —
+    // the opposite of what a design screen is for. These three lights exist to
+    // model the vehicle: a key from the aisle, a cool rim from behind to lift
+    // it off the far wall, and a soft bounce off the floor.
+    const key = new THREE.DirectionalLight(0xfff2e0, 2.1);
+    key.position.set(26, 46, 52);
+    key.target = this.vehicleAnchor;
+    this.scene.add(key, key.target);
+
+    const rim = new THREE.DirectionalLight(0x9dc4ff, 1.5);
+    rim.position.set(-34, 30, -44);
+    rim.target = this.vehicleAnchor;
+    this.scene.add(rim);
+
+    this.scene.add(new THREE.HemisphereLight(0xa8bed8, 0x4a4237, 0.9));
   }
 
   /** Replaces the preview vehicle with one built from the current design. */
@@ -88,10 +106,17 @@ export class BuildScene {
       .setY(this.vehicleAnchor.position.y + this.vehicle.height * 0.45);
   }
 
-  /** How far back the camera needs to be to hold the whole vehicle. */
+  /**
+   * How far back the camera needs to be to hold the whole vehicle.
+   *
+   * Capped at the room: the bay is 92 m long, so there is nowhere inside it to
+   * stand more than about 43 m from the assembly point without going through a
+   * wall. A tall stack is framed by a wide lens rather than by distance, which
+   * is also how it looks in a real high bay.
+   */
   framingDistance(): number {
     const h = this.vehicle?.height ?? 12;
-    return clamp(h * 1.45, 18, 150);
+    return clamp(h * 0.85, 18, 43);
   }
 
   update(dt: number): void {

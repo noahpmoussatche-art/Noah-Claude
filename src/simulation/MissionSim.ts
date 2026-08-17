@@ -540,6 +540,11 @@ export class MissionSim {
     if (periapsisReached && this.telemetry.periapsis > 145_000) {
       for (const e of this.vehicle.activeEngines()) e.throttle = 0;
       this.state = MissionState.ORBIT;
+      // Drop out of time warp for the arrival on station. Reaching orbit is one
+      // of the moments the mission exists for, and at fifty times real speed the
+      // whole coast is over in half a second — the player would see a slate and
+      // nothing else. They are free to warp straight back up.
+      this.timeScale = 1;
       this.emitOnce('seco');
       this.emitOnce('orbit-achieved', {
         apoapsis: Math.round(this.telemetry.apoapsis),
@@ -677,7 +682,7 @@ export class MissionSim {
 
     // Mars missions perform the injection burn after a short coast.
     if (this.mission.destination === 'mars-surface') {
-      if (!this.fired.has('transfer-burn') && this.missionTime > this.orbitTime() + 25) {
+      if (!this.fired.has('transfer-burn') && this.missionTime > this.orbitTime() + 45) {
         this.emitOnce('transfer-burn');
         this.state = MissionState.TRANSFER;
         this.transfer.begin(this.missionTime);

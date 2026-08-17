@@ -26,7 +26,8 @@ import {
   trackingShot,
 } from './CameraDirector';
 import { Timeline, type DialogueLine } from './Timeline';
-import { MissionState, SPACE_VIEW_SCALE } from '../data/constants';
+import { MARS, MissionState, SPACE_VIEW_SCALE } from '../data/constants';
+import { clamp } from '../utils/math';
 
 export interface CinematicContext {
   readonly scene: MissionScene;
@@ -288,6 +289,7 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
 
   let coverageTimer = 0;
   let shotIndex = 0;
+  let lastCutAltitude = 0;
 
   const unsubscribe = sim.on((e) => {
     switch (e.type) {
@@ -418,22 +420,35 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
         // The cruise is a map view spanning two planetary orbits, so the camera
         // has to pull back by eight orders of magnitude and the clip range has
         // to follow it.
-        const AU = 1.496e11 * SPACE_VIEW_SCALE;
-        director.setClipRange(500, AU * 24);
+        const fov = 44;
+        // Stand back far enough to hold Mars's whole orbit. Looking down from
+        // 36 degrees above the ecliptic the orbits project as ellipses squashed
+        // by the sine of that angle, and it is that squashed height the frame
+        // has to contain — with margin, because the near half of an orbit is
+        // closer to the camera and therefore drawn larger.
+        const elevation = 0.63;
+        // The 1.6 is not slack: the near half of the orbit sits closer to the
+        // camera than the projection's sine term assumes and lands lower in
+        // frame than the far half. Measured against the rendered map, not
+        // guessed — at 1.45 the near limb of Mars's orbit clipped the bottom.
+        const halfHeight = MARS.orbitRadius * SPACE_VIEW_SCALE * Math.sin(elevation) * 1.6;
+        const distance = halfHeight / Math.tan(THREE.MathUtils.degToRad(fov / 2));
+        director.setClipRange(distance * 0.01, distance * 20);
         director.play({
           kind: 'orbital',
           target: () => new THREE.Vector3(0, 0, 0),
-          fov: 44,
+          fov,
           blend: 3,
           stiffness: 0.9,
           handheld: 0.05,
           position: (t: number) => {
             // A very slow drift around the system, so the map is never static.
             const a = 0.7 + t * 0.012;
+            const ground = distance * Math.cos(elevation);
             return new THREE.Vector3(
-              Math.sin(a) * AU * 1.7,
-              AU * 1.15,
-              Math.cos(a) * AU * 1.7,
+              Math.sin(a) * ground,
+              distance * Math.sin(elevation),
+              Math.cos(a) * ground,
             );
           },
         });
@@ -450,12 +465,20 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
   // unchanged for minutes (spec §28: during launch, the camera should change).
   const tick = (dt: number): void => {
     if (sim.state !== MissionState.ASCENT) return;
+    const alt = sim.telemetry.altitude;
+
+    // Re-frame on wall-clock time *or* on progress up the trajectory, whichever
+    // comes first. Wall clock alone is not enough: under time warp the vehicle
+    // can go from the tower to orbit inside a couple of real seconds, and a
+    // cadence measured in real seconds would leave a fixed pad camera pointed at
+    // a two-pixel dot ten kilometres up for the whole climb.
     coverageTimer += dt;
-    if (coverageTimer < 11) return;
+    const climbed = alt > lastCutAltitude * 2.4 + 1_200;
+    if (coverageTimer < 6 && !climbed) return;
     coverageTimer = 0;
+    lastCutAltitude = alt;
     shotIndex++;
 
-    const alt = sim.telemetry.altitude;
     const spread = 18 + alt * 0.0009;
 
     switch (shotIndex % 3) {
@@ -517,7 +540,7 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         slate('MARS ARRIVAL', 'ENTRY INTERFACE IN 00:40');
         // Wide shot with the planet filling frame behind the vehicle (spec §33).
         director.play(
-          trackingShot(vehicleMid, new THREE.Vector3(48, 14, 60), {
+          trackingShot(vehicleMid, new THREE.Vector3(26, 10, 34), {
             fov: 42,
             blend: 2.2,
             stiffness: 1.6,
@@ -530,8 +553,10 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         audio.commsChirp();
         // Trailing shot down the wake, so the plasma is between camera and ship.
         director.play(
-          trackingShot(vehicle, new THREE.Vector3(0, 26, 62), {
-            fov: 40,
+          // Close enough that a four-metre aeroshell reads as a vehicle: at the
+          // old sixty-odd metres it was a speck with a glow around it.
+          trackingShot(vehicle, new THREE.Vector3(4, 9, 22), {
+            fov: 38,
             blend: 1.4,
             stiffness: 1.9,
           }),
@@ -551,10 +576,12 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
       case 'chute-deploy':
         audio.chuteDeploy();
         slate('PARACHUTE DEPLOY', '');
-        // Pull back so the canopy has room to inflate in frame (spec §35).
+        // Pull back so the canopy has room to inflate in frame (spec §35), and
+        // sit above the vehicle looking down, so Mars is underneath it rather
+        // than off-camera — the shot has to say "descending toward a planet".
         director.play(
-          trackingShot(vehicleMid, new THREE.Vector3(34, 6, 40), {
-            fov: 44,
+          trackingShot(vehicleMid, new THREE.Vector3(36, 30, 44), {
+            fov: 46,
             blend: 0.5,
             stiffness: 2.6,
           }),
@@ -573,22 +600,28 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
       case 'landing-burn':
         audio.ignition();
         slate('POWERED DESCENT', '');
-        // Low angle from the surface, watching the lander come down on its
-        // engine — the shot that makes the landing feel like a landing.
+        // From the surface, watching the lander come down on its engine — the
+        // shot that makes the landing feel like a landing.
+        //
+        // The burn starts around 900 m up, so a camera parked 30 m from the
+        // touchdown point would spend the whole descent pointing at empty sky.
+        // Instead it stands back roughly as far as the lander is high, which
+        // keeps the vehicle and the horizon in the same frame the whole way
+        // down, and closes to a low hero angle as the lander arrives.
         director.play({
           kind: 'ground',
           target: vehicle,
-          fov: 34,
+          fov: 36,
           blend: 1.0,
           stiffness: 2.2,
           handheld: 0.7,
           position: () => {
             const v = vehicle();
-            return new THREE.Vector3(
-              v.x + 34,
-              scene.groundHeightAt(v.x + 34, v.z + 26) + 2.2,
-              v.z + 26,
-            );
+            const alt = Math.max(sim.marsFlight?.altitude() ?? 0, 0);
+            const back = clamp(alt * 0.95, 38, 900);
+            const x = v.x + back * 0.78;
+            const z = v.z + back * 0.62;
+            return new THREE.Vector3(x, scene.groundHeightAt(x, z) + 2.4 + alt * 0.06, z);
           },
         });
         break;

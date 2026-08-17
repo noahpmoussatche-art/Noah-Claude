@@ -12,11 +12,23 @@
  * frames.
  */
 import * as THREE from 'three';
+import { LAYER_FAR_SPACE } from '../data/constants';
 import { clamp } from '../utils/math';
+
+/**
+ * Clip range for the far-space pass. Everything it draws is a scaled-down
+ * planet a few thousand units across, so the range can be tight and the depth
+ * buffer stays precise.
+ */
+const FAR_PASS_NEAR = 1;
+const FAR_PASS_FAR = 60_000;
 
 export class Renderer {
   readonly gl: THREE.WebGLRenderer;
   private readonly canvas: HTMLCanvasElement;
+
+  /** Camera for the far-space pass; only ever sees LAYER_FAR_SPACE. */
+  private readonly farCamera = new THREE.PerspectiveCamera();
 
   /** Current resolution multiplier, adapted at runtime. */
   private scale = 1;
@@ -49,6 +61,11 @@ export class Renderer {
     // structural geometry is large.
     this.gl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.gl.shadowMap.autoUpdate = true;
+
+    // The far camera sees only the far-space layer, and the main camera never
+    // sees it — so each pass draws its own half of the world with no filtering
+    // at the call site.
+    this.farCamera.layers.set(LAYER_FAR_SPACE);
 
     this.resize();
   }
@@ -100,8 +117,43 @@ export class Renderer {
     }
   }
 
-  render(scene: THREE.Scene, camera: THREE.Camera): void {
+  /**
+   * Renders the scene, optionally preceded by a far-space pass.
+   *
+   * A planet is eight thousand kilometres across and the vehicle in front of it
+   * is fifty metres long. No single depth buffer holds both, so anything that
+   * large is drawn first through a second camera that shares this one's
+   * orientation and field of view but sits at a scaled-down position — which
+   * preserves every angle exactly, so the parallax is right — and then the
+   * depth buffer is cleared and the real world is drawn on top of it. It is the
+   * standard way to put a world behind a spacecraft, and it is why the planet
+   * geometry lives on its own render layer.
+   *
+   * `farScale` of zero skips the pass entirely, which is the case everywhere
+   * except in orbit.
+   */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, farScale = 0): void {
+    if (farScale <= 0) {
+      this.gl.render(scene, camera);
+      return;
+    }
+
+    this.gl.autoClear = false;
+    this.gl.clear();
+
+    this.farCamera.fov = camera.fov;
+    this.farCamera.aspect = camera.aspect;
+    this.farCamera.near = FAR_PASS_NEAR;
+    this.farCamera.far = FAR_PASS_FAR;
+    this.farCamera.position.copy(camera.position).multiplyScalar(farScale);
+    this.farCamera.quaternion.copy(camera.quaternion);
+    this.farCamera.updateProjectionMatrix();
+    this.farCamera.updateMatrixWorld(true);
+    this.gl.render(scene, this.farCamera);
+
+    this.gl.clearDepth();
     this.gl.render(scene, camera);
+    this.gl.autoClear = true;
   }
 
   /** Diagnostic counters, surfaced in the console for performance work. */

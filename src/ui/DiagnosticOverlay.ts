@@ -93,6 +93,7 @@ export class DiagnosticOverlay {
   private trajectoryTimer = 0;
 
   private enabled = false;
+  private trajectoryAllowed = true;
 
   constructor(vehicle: Vehicle) {
     this.group.name = 'diagnostics';
@@ -185,7 +186,17 @@ export class DiagnosticOverlay {
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.group.visible = on;
-    this.trajectory.visible = on;
+    this.trajectory.visible = on && this.trajectoryAllowed;
+  }
+
+  /**
+   * Hides the flown trail without clearing it. The trail is accumulated in
+   * whatever frame the vehicle is currently flown in, so a view that uses a
+   * different frame — the heliocentric map — has to suppress it.
+   */
+  setTrajectoryVisible(on: boolean): void {
+    this.trajectoryAllowed = on;
+    this.trajectory.visible = this.enabled && on;
   }
 
   get isEnabled(): boolean {

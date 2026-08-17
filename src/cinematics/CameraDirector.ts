@@ -79,6 +79,14 @@ export class CameraDirector {
   private smoothFov = 45;
   private smoothRoll = 0;
 
+  /**
+   * Where the shot wanted the camera on the previous frame, used to feed the
+   * subject's own motion forward into the smoothing (see `update`).
+   */
+  private readonly lastIdealPos = new THREE.Vector3();
+  private readonly lastIdealLook = new THREE.Vector3();
+  private hasLastIdeal = false;
+
   /** Shake driven by the vehicle (spec §13) and by handheld feel. */
   private shakeAmount = 0;
   private shakeTime = 0;
@@ -94,6 +102,9 @@ export class CameraDirector {
 
   /** Queue of shots to play in order. */
   private readonly queue: Shot[] = [];
+
+  /** Scratch. */
+  private readonly _ff = new THREE.Vector3();
 
   constructor(aspect = 16 / 9) {
     // 45° vertical FOV is a reasonable "normal" lens; shots override it.
@@ -113,6 +124,9 @@ export class CameraDirector {
     this.blendDuration = shot.blend ?? 0.8;
     this.blendTime = 0;
     this.userControlled = false;
+    // A cut moves the ideal discontinuously; feed-forward has to restart or it
+    // would fling the camera across the discontinuity in a single frame.
+    this.hasLastIdeal = false;
     shot.onEnter?.();
   }
 
@@ -149,6 +163,7 @@ export class CameraDirector {
    * drags, or when a cinematic ends and gameplay resumes.
    */
   enterFreeCamera(target: () => THREE.Vector3, distance?: number): void {
+    this.hasLastIdeal = false;
     this.freeTarget = target;
     this.userControlled = true;
     this.current = null;
@@ -281,6 +296,23 @@ export class CameraDirector {
       this.smoothFov = idealFov;
     }
 
+    // ---- Follow the subject's motion, then damp only the residual ----
+    //
+    // A plain critically-damped follow lags a moving subject by roughly its
+    // speed divided by the stiffness. That is invisible on a rocket rolling out
+    // to the pad and catastrophic on one entering an atmosphere at five
+    // kilometres a second, where it put the camera a kilometre behind the
+    // vehicle and left the shot empty. Carrying the ideal's own velocity
+    // forward first removes the steady-state lag entirely, so the damping is
+    // left to do what it is actually for: smoothing changes of framing.
+    if (this.hasLastIdeal && dt > 0) {
+      this.smoothPos.add(this._ff.subVectors(idealPos, this.lastIdealPos));
+      this.smoothLook.add(this._ff.subVectors(idealLook, this.lastIdealLook));
+    }
+    this.lastIdealPos.copy(idealPos);
+    this.lastIdealLook.copy(idealLook);
+    this.hasLastIdeal = true;
+
     dampVec3(this.smoothPos, idealPos, stiffness, dt);
     dampVec3(this.smoothLook, idealLook, stiffness * 1.25, dt);
     this.smoothFov = damp(this.smoothFov, idealFov, 5, dt);
@@ -328,6 +360,7 @@ export class CameraDirector {
 
   /** Immediately places the camera, skipping smoothing (used on scene changes). */
   snapTo(position: THREE.Vector3, lookAt: THREE.Vector3, fov = 45): void {
+    this.hasLastIdeal = false;
     this.smoothPos.copy(position);
     this.smoothLook.copy(lookAt);
     this.smoothFov = fov;

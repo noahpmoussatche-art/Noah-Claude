@@ -39,6 +39,7 @@ const SKY_FRAGMENT = /* glsl */ `
   uniform vec3  uDawnLow;
   uniform vec3  uDawnHigh;
   uniform float uStarBrightness;
+  uniform float uOpacity;
   uniform float uTime;
 
   // Hash-based star field; cheap and stable, no texture required.
@@ -106,7 +107,7 @@ const SKY_FRAGMENT = /* glsl */ `
     s *= 1.0 - clamp(band * 2.0, 0.0, 1.0);
     color += vec3(s);
 
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, uOpacity);
   }
 `;
 
@@ -127,12 +128,14 @@ export class SkyDome {
         uDawnLow: { value: new THREE.Color(0xf0a05a) },
         uDawnHigh: { value: new THREE.Color(0x2b3f78) },
         uStarBrightness: { value: 0 },
+        uOpacity: { value: 1 },
         uTime: { value: 0 },
       },
       vertexShader: SKY_VERTEX,
       fragmentShader: SKY_FRAGMENT,
       side: THREE.BackSide,
       depthWrite: false,
+      transparent: true,
       fog: false,
     });
 
@@ -161,6 +164,15 @@ export class SkyDome {
   setAltitude(metres: number): void {
     const t = clamp((metres - 12_000) / (EARTH.atmosphereTop * 0.62), 0, 1);
     this.material.uniforms.uAltitudeFactor.value = Math.pow(t, 0.78);
+  }
+
+  /**
+   * Dissolves the dome. Above the atmosphere there is nothing left to scatter
+   * light, and an opaque dome would paint over the planet drawn behind it in
+   * the far-space pass — so it fades out entirely rather than going black.
+   */
+  setOpacity(amount: number): void {
+    this.material.uniforms.uOpacity.value = clamp(amount, 0, 1);
   }
 
   /** Forces the star layer on, for orbital and deep-space views. */

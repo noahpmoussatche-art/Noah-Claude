@@ -42,6 +42,13 @@ interface Crater {
 const TERRAIN_SIZE = 9_000;
 const TERRAIN_SEGMENTS = 320;
 
+/**
+ * Radius of the coarse far-field ring. Roughly the distance the thin Martian
+ * atmosphere lets you see — far enough that the fog has closed in long before
+ * the outer edge does.
+ */
+const FAR_FIELD_SIZE = 70_000;
+
 export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   const root = new THREE.Group();
   root.name = 'mars-surface';
@@ -157,6 +164,18 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   root.add(terrain);
 
   // -------------------------------------------------------------------------
+  // Far field: a coarse annulus carrying the same height function out to the
+  // horizon.
+  //
+  // The detailed patch is only 9 km across, which is plenty from a metre off
+  // the ground — Mars's horizon is about 3.4 km away at eye height. But the
+  // vehicle is under its parachute at 11 km, looking straight down, and from
+  // there a 9 km patch reads as a square plate floating in the sky. The far
+  // field costs one coarse mesh and turns that plate back into a planet.
+  // -------------------------------------------------------------------------
+  root.add(buildFarField(heightAt, lowColor, midColor, darkColor, detail));
+
+  // -------------------------------------------------------------------------
   // Distant relief: a ring of mesas and mountains beyond the terrain patch, so
   // the horizon is not a hard edge.
   // -------------------------------------------------------------------------
@@ -213,13 +232,16 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   root.add(sky);
 
   // Ground haze: a broad translucent shell that thickens toward the horizon and
-  // gives the scene aerial perspective.
+  // gives the scene aerial perspective. It sits out at the far-field edge, low
+  // and wide, so from the ground it reads as a band along the horizon — and
+  // from above it is behind the camera rather than a ring drawn around the
+  // landing site.
   const haze = mesh(
-    new THREE.CylinderGeometry(TERRAIN_SIZE * 0.95, TERRAIN_SIZE * 0.95, 900, 48, 1, true),
+    new THREE.CylinderGeometry(FAR_FIELD_SIZE * 0.94, FAR_FIELD_SIZE * 0.94, 2_600, 64, 1, true),
     new THREE.MeshBasicMaterial({
       color: 0xc98a5c,
       transparent: true,
-      opacity: 0.26,
+      opacity: 0.3,
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
@@ -227,7 +249,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
     false,
     false,
   );
-  haze.position.y = 190;
+  haze.position.y = 420;
   haze.renderOrder = -1;
   root.add(haze);
 
@@ -293,6 +315,90 @@ export function updateMarsDust(
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Coarse ground from the edge of the detailed patch out to the horizon.
+ *
+ * Built as a ring so the detailed mesh is not paid for twice, with radial rings
+ * spaced geometrically: dense where the seam has to match, sparse where a
+ * vertex covers kilometres and nobody can tell. The height function is the same
+ * one the detailed patch uses, damped with distance so the low-frequency
+ * regional slopes survive while the fine detail — which is far below the
+ * sampling rate out here — is faded away rather than aliased into noise.
+ */
+function buildFarField(
+  heightAt: (x: number, z: number) => number,
+  lowColor: THREE.Color,
+  midColor: THREE.Color,
+  darkColor: THREE.Color,
+  detail: Noise2D,
+): THREE.Mesh {
+  const inner = TERRAIN_SIZE * 0.46;
+  const outer = FAR_FIELD_SIZE;
+  const rings = 34;
+  const segments = 128;
+
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const c = new THREE.Color();
+
+  for (let r = 0; r <= rings; r++) {
+    // Geometric spacing: fine at the seam, coarse at the horizon.
+    const t = r / rings;
+    const radius = inner * Math.pow(outer / inner, t);
+    // Full relief until past the corner of the square patch, so the two meshes
+    // agree everywhere they overlap; then fade it out with distance, because
+    // out there the coarse sampling would alias it into noise.
+    const fadeStart = TERRAIN_SIZE * 0.75;
+    const relief = clamp(1 - (radius - fadeStart) / (TERRAIN_SIZE * 1.4), 0, 1);
+
+    for (let s = 0; s <= segments; s++) {
+      const a = (s / segments) * Math.PI * 2;
+      const x = Math.cos(a) * radius;
+      const z = Math.sin(a) * radius;
+      const h = heightAt(x, z) * relief;
+      positions.push(x, h, z);
+
+      const patch = detail.fbm(x * 0.0009, z * 0.0009, 3) * 0.5 + 0.5;
+      c.copy(lowColor).lerp(midColor, patch);
+      // Everything far away sits behind more atmosphere, so it desaturates
+      // toward the haze rather than staying vivid to the horizon.
+      c.lerp(darkColor, clamp((radius - inner) / (outer * 0.7), 0, 0.35));
+      colors.push(c.r, c.g, c.b);
+    }
+  }
+
+  const stride = segments + 1;
+  for (let r = 0; r < rings; r++) {
+    for (let s = 0; s < segments; s++) {
+      const a = r * stride + s;
+      const b = a + 1;
+      const d = a + stride;
+      const e = d + 1;
+      indices.push(a, d, b, b, d, e);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+
+  // No shadows either way: it is kilometres from anything that casts one.
+  const far = mesh(
+    geo,
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }),
+    false,
+    false,
+  );
+  // Two metres down, so the detailed patch always wins where the two overlap
+  // instead of the pair z-fighting across several square kilometres.
+  far.position.y = -2;
+  return far;
+}
 
 function buildRockField(
   heightAt: (x: number, z: number) => number,

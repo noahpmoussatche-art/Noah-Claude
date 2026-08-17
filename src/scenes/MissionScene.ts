@@ -30,9 +30,30 @@ import {
 import { EntryPlasma } from '../effects/EntryPlasma';
 import { createCrew, type DuckActor } from '../characters/DuckActor';
 import { clamp, lerp } from '../utils/math';
+import { softParticle } from '../render/textures';
 import { InterplanetaryTransfer } from '../simulation/Transfer';
 
 export type SceneMode = 'launch-site' | 'cruise' | 'mars';
+
+/**
+ * Reduction applied in the renderer's far-space pass. At 1/2000 the Earth is a
+ * 3186-unit sphere and a 200 km orbit is 100 units above it — numbers a depth
+ * buffer is comfortable with, while every angle stays exact.
+ */
+const FAR_SPACE_SCALE = 1 / 2_000;
+
+/** Altitude at which the sky dome gives way to the planet, metres. */
+const FAR_EARTH_ALTITUDE = 55_000;
+
+/**
+ * Altitude at which the Martian render frame locks to the landing site even if
+ * the parachute has not reported deploying, metres. The frame must be anchored
+ * well before touchdown or the ground under the lander is the wrong ground.
+ */
+const MARS_FRAME_LOCK_ALTITUDE = 14_000;
+
+/** Body disc radius in the cruise map, as a fraction of the astronomical unit. */
+const CRUISE_BODY_SCALE = 0.042;
 
 export class MissionScene {
   readonly scene = new THREE.Scene();
@@ -91,6 +112,9 @@ export class MissionScene {
   private marsOrigin = new THREE.Vector3();
   private marsOriginLocked = false;
 
+  /** Orbital Earth, drawn in the renderer's far-space pass. */
+  private farEarth: THREE.Group | null = null;
+
   private cameraPosition = new THREE.Vector3();
   private supersonicFired = false;
 
@@ -104,7 +128,12 @@ export class MissionScene {
     this.sky = new SkyDome(60_000);
     this.scene.add(this.sky.mesh);
 
-    this.starfield = buildStarfield(3_500, 380_000);
+    // The starfield lives on the far-space layer, so it is drawn in the
+    // renderer's far pass — behind the planet rather than through it — and its
+    // radius is small enough to sit inside that pass's clip range in every
+    // view. It is re-centred on the camera each frame, so it reads as infinity.
+    this.starfield = buildStarfield(3_500, 20_000);
+    this.starfield.layers.set(LAYER_FAR_SPACE);
     this.starfield.visible = false;
     this.scene.add(this.starfield);
 
@@ -277,21 +306,32 @@ export class MissionScene {
     // relative to the astronomical unit — the same convention every orrery
     // uses. Distances remain to scale; only the discs are exaggerated.
     const AU = 1.496e11 * S;
-    const bodyScale = AU * 0.022;
+    // Body sizes for the map view. The camera has to stand far enough back to
+    // hold Mars's whole orbit, and at that distance a true-scale planet is well
+    // under a pixel — so the discs are drawn at a schematic fraction of the
+    // astronomical unit, the way every orrery does it. Distances stay exact.
+    const bodyScale = AU * CRUISE_BODY_SCALE;
 
     // Sun at the origin.
-    this.cruiseSun = buildSun(AU * 0.03);
+    this.cruiseSun = buildSun(AU * CRUISE_BODY_SCALE * 1.5);
     group.add(this.cruiseSun);
 
     const sunLight = new THREE.PointLight(0xfff0d8, 3.2, 0, 0);
     group.add(sunLight);
 
-    // Planets, sized relative to each other so Mars still reads as the smaller.
+    // Planets, sized relative to each other so Mars still reads as the smaller
+    // — but not so much smaller that it drops below a readable disc.
     this.cruiseEarth = buildPlanetGlobe(bodyScale, 'earth', 11);
     group.add(this.cruiseEarth);
+    this.cruiseEarth.add(mapLabel('EARTH', bodyScale));
 
-    this.cruiseMars = buildPlanetGlobe(bodyScale * (MARS.radius / EARTH.radius), 'mars', 23);
+    this.cruiseMars = buildPlanetGlobe(
+      bodyScale * Math.max(MARS.radius / EARTH.radius, 0.68),
+      'mars',
+      23,
+    );
     group.add(this.cruiseMars);
+    this.cruiseMars.add(mapLabel('MARS', bodyScale * 0.68));
 
     // Orbits and the transfer trajectory (spec §31).
     const orbitMat = new THREE.LineBasicMaterial({
@@ -331,15 +371,19 @@ export class MissionScene {
       }),
     );
     marker.name = 'ship-marker';
-    marker.scale.setScalar(EARTH.orbitRadius * S * 0.012);
+    marker.material.map = softParticle('rgba(180,255,215,1)', 'rgba(60,220,150,0)');
+    marker.scale.setScalar(AU * CRUISE_BODY_SCALE * 1.9);
     this.cruiseShip.add(marker);
+    this.cruiseShip.add(mapLabel('ARES', AU * CRUISE_BODY_SCALE * 0.75, 0x8fe6bd));
 
     this.cruiseGroup = group;
     this.scene.add(group);
 
-    // Hide the launch site and switch to a space environment.
+    // Hide the launch site and switch to a space environment. The orbital
+    // Earth goes with it: the map view has its own, at map scale.
     this.complex.root.visible = false;
     this.sky.mesh.visible = false;
+    if (this.farEarth) this.farEarth.visible = false;
     this.starfield.visible = true;
     this.scene.fog = null;
     this.sunLight.intensity = 0;
@@ -369,7 +413,12 @@ export class MissionScene {
     this.sim.vehicle.root.position.set(0, 0, 0);
 
     this.starfield.visible = false;
-    this.scene.fog = new THREE.FogExp2(0xb87b4e, 0.00035);
+    if (this.farEarth) this.farEarth.visible = false;
+    // Mars's air is thin: the horizon is dusty, not walled off. At 0.00035 the
+    // fog reached full extinction inside six kilometres and every surface shot
+    // came out as a flat brown card. This is tuned so a mesa five kilometres
+    // out is still clearly a mesa.
+    this.scene.fog = new THREE.FogExp2(0xb87b4e, 0.000055);
     this.sunLight.intensity = 0;
     this.ambientLight.intensity = 0;
 
@@ -439,9 +488,21 @@ export class MissionScene {
     this.ambientLight.intensity = lerp(1.15, 0.08, this.sky.altitudeFactor);
     this.sunLight.intensity = lerp(3.4, 4.2, this.sky.altitudeFactor);
     this.starfield.visible = this.sky.altitudeFactor > 0.35;
-    if (this.starfield.visible) {
-      this.starfield.position.copy(this.cameraPosition);
+
+    // ---- The planet itself, once there is height enough to see it ----
+    // Below this the sky dome and the launch site are the world; above it they
+    // are a few pixels of nothing and the Earth has to take over, or orbit is a
+    // black screen with a rocket in it.
+    if (altitude > FAR_EARTH_ALTITUDE * 0.75) this.ensureFarEarth();
+    if (this.farEarth) {
+      this.farEarth.visible = altitude > FAR_EARTH_ALTITUDE;
+      this.farEarth.rotation.y += dt * 7.3e-5;
     }
+    // The dome dissolves as the planet takes over, rather than cutting: it is
+    // opaque, so left on it would simply paint over the Earth behind it.
+    this.sky.setOpacity(1 - clamp((altitude - FAR_EARTH_ALTITUDE * 0.72) / 18_000, 0, 1));
+    this.sky.mesh.visible = altitude < FAR_EARTH_ALTITUDE * 0.72 + 18_000;
+    this.syncStarfield();
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.density = lerp(0.00042, 0, clamp(altitude / 30_000, 0, 1));
     }
@@ -545,7 +606,7 @@ export class MissionScene {
       this.cruiseShip.rotateY(dt * 0.05);
     }
 
-    this.starfield.position.copy(this.cameraPosition);
+    this.syncStarfield();
 
     // Solar arrays generate: a faint venting of attitude thrusters now and then.
     if (Math.random() < dt * 0.4 && this.cruiseShip) {
@@ -570,21 +631,32 @@ export class MissionScene {
     // ---- Vehicle transform ----
     flight.renderPosition(this._v);
 
-    // Lock the render frame once the parachute is out; until then keep the
-    // vehicle over the middle of the terrain patch.
+    const altitude = flight.altitude();
+
+    // Lock the render frame once the parachute is out — or, failing that, once
+    // the vehicle is low enough that the ground has to be right. Until then the
+    // frame follows the vehicle, keeping it over the middle of the patch.
     if (!this.marsOriginLocked) {
       this.marsOrigin.set(this._v.x, 0, this._v.z);
-      if (sim.deployment.chute > 0.05) this.marsOriginLocked = true;
+      if (sim.deployment.chute > 0.05 || altitude < MARS_FRAME_LOCK_ALTITUDE) {
+        this.marsOriginLocked = true;
+      }
     }
     const localX = this._v.x - this.marsOrigin.x;
     const localZ = this._v.z - this.marsOrigin.z;
 
-    // The flight simulator measures altitude from the planet datum, but the
-    // rendered terrain has relief on top of it. Lifting the vehicle by the
-    // local ground height keeps "altitude zero" meaning "resting on the
-    // surface" — otherwise the lander touches down buried inside a hillside.
+    // Height comes from the altimeter, not from the render position.
+    //
+    // `renderPosition` is measured in a tangent plane pinned at the *entry*
+    // point, and entry runs five hundred kilometres downrange — far enough that
+    // the planet curves away by some forty kilometres underneath it. Taking the
+    // vertical straight from that plane put the lander tens of kilometres below
+    // the terrain, with the camera aimed at a point deep inside the ground,
+    // which is why every landing frame came out as a flat brown card. In a
+    // local frame anchored at the landing site the correct height is simply the
+    // altitude above the datum, plus whatever relief the terrain has there.
     const groundY = mars.heightAt(localX, localZ);
-    this.sim.vehicle.root.position.set(localX, this._v.y + groundY, localZ);
+    this.sim.vehicle.root.position.set(localX, altitude + groundY, localZ);
     this.sim.vehicle.root.quaternion.copy(flight.state.orientation);
 
     if (sim.shake > 0.001) {
@@ -593,7 +665,6 @@ export class MissionScene {
       this.sim.vehicle.root.position.z += Math.sin(t * 67 + 0.7) * sim.shake * 0.14;
     }
 
-    const altitude = flight.altitude();
     const rho = density(MARS, altitude);
 
     // ---- Entry plasma driven by the simulated heat flux (spec §34) ----
@@ -630,7 +701,21 @@ export class MissionScene {
     this.marsDustBlast.update(dt);
 
     // ---- Ambient wind-blown dust ----
-    updateMarsDust(mars.dust, dt, this.cameraPosition, 1);
+    // Wind-blown dust is a surface phenomenon. It used to be emitted around the
+    // camera at any altitude, which put metre-wide puffs across the lens while
+    // the vehicle was still eleven kilometres up under its parachute.
+    const cameraAltitude = this.cameraPosition.y - mars.heightAt(this.cameraPosition.x, this.cameraPosition.z);
+    const nearSurface = cameraAltitude < 400;
+    mars.dust.points.visible = nearSurface;
+    if (nearSurface) {
+      updateMarsDust(mars.dust, dt, this.cameraPosition, clamp(1 - cameraAltitude / 400, 0.15, 1));
+    }
+
+    // Aerial perspective thins out with height, the same way it does on the
+    // climb from Earth — from orbit there is nothing between camera and ground.
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.density = lerp(0.000055, 0.000012, clamp(cameraAltitude / 12_000, 0, 1));
+    }
 
     // Sky and shadows track the vehicle.
     mars.sky.position.copy(this.cameraPosition);
@@ -638,6 +723,18 @@ export class MissionScene {
     mars.sunLight.position
       .copy(this.sim.vehicle.root.position)
       .add(new THREE.Vector3(-320, 300, 220));
+  }
+
+  /**
+   * Re-centres the starfield on the camera.
+   *
+   * It is drawn in the far-space pass, whose camera sits at the main camera's
+   * position reduced by the pass scale — so the star sphere has to be reduced
+   * by the same factor or it lands outside that pass's clip range entirely and
+   * the sky goes empty in orbit.
+   */
+  private syncStarfield(): void {
+    this.starfield.position.copy(this.cameraPosition).multiplyScalar(this.farSpaceScale());
   }
 
   /** Writes throttle and ambient pressure into every plume. */
@@ -711,9 +808,82 @@ export class MissionScene {
     return this.mars ? this.mars.heightAt(x, z) : 0;
   }
 
-  /** Sets the render layer used for the far-space pass. */
-  applyFarLayer(): void {
-    this.starfield.layers.set(LAYER_FAR_SPACE);
+  /**
+   * Numeric state of the render frame, for the headless visual harness. The
+   * screenshots alone cannot say *why* a frame is empty — this reports where
+   * the camera, the vehicle and the ground actually are.
+   */
+  debugSnapshot(): Record<string, unknown> {
+    const v = this.sim.vehicle.root.position;
+    return {
+      mode: this.mode,
+      vehicle: [round2(v.x), round2(v.y), round2(v.z)],
+      camera: [
+        round2(this.cameraPosition.x),
+        round2(this.cameraPosition.y),
+        round2(this.cameraPosition.z),
+      ],
+      cameraToVehicle: round2(this.cameraPosition.distanceTo(v)),
+      marsOrigin: [round2(this.marsOrigin.x), round2(this.marsOrigin.z)],
+      marsOriginLocked: this.marsOriginLocked,
+      groundUnderVehicle: this.mars ? round2(this.mars.heightAt(v.x, v.z)) : null,
+      groundUnderCamera: this.mars
+        ? round2(this.mars.heightAt(this.cameraPosition.x, this.cameraPosition.z))
+        : null,
+      altitude: round2(
+        this.mode === 'mars' && this.sim.marsFlight
+          ? this.sim.marsFlight.altitude()
+          : this.sim.flight.altitude(),
+      ),
+    };
+  }
+
+  /**
+   * Reduction factor for the renderer's far-space pass.
+   *
+   * The pass always runs — it is what draws the stars, which have to sit behind
+   * everything else — but only the orbital phase needs it *scaled*, because
+   * that is the only time something the size of a planet shares the frame with
+   * something the size of a rocket.
+   */
+  farSpaceScale(): number {
+    if (this.farEarth?.visible) return FAR_SPACE_SCALE;
+    // Unscaled when only the stars need it, and skipped altogether when there
+    // is nothing on the far layer to draw — the pass costs a full scene
+    // traversal, and at the pad and on the ground it would draw nothing.
+    return this.starfield.visible ? 1 : 0;
+  }
+
+  /**
+   * Builds the orbital Earth, once, the first time the vehicle gets high enough
+   * to see it. Radius and centre are the real ones, reduced by the far-space
+   * factor — the vehicle's own position is reduced by exactly the same factor
+   * when the far pass runs, so the horizon sits where the physics says it does.
+   */
+  private ensureFarEarth(): void {
+    if (this.farEarth) return;
+
+    const group = new THREE.Group();
+    group.name = 'far-earth';
+
+    const globe = buildPlanetGlobe(EARTH.radius * FAR_SPACE_SCALE, 'earth', 7);
+    // The launch site is the world origin and sits on the surface, so the
+    // planet's centre is one radius straight down.
+    globe.position.y = -EARTH.radius * FAR_SPACE_SCALE;
+    group.add(globe);
+
+    // The far pass collects only lights that share its layer, so the planet
+    // needs its own sun. Same direction as the one lighting the vehicle.
+    const sun = new THREE.DirectionalLight(0xfff4e2, 3.6);
+    sun.position.copy(this.sunLight.position).normalize().multiplyScalar(1e5);
+    group.add(sun);
+    group.add(sun.target);
+    group.add(new THREE.AmbientLight(0x2c3d55, 0.5));
+
+    group.traverse((o) => o.layers.set(LAYER_FAR_SPACE));
+    group.visible = false;
+    this.scene.add(group);
+    this.farEarth = group;
   }
 
   dispose(): void {
@@ -729,4 +899,50 @@ export class MissionScene {
     this.crew.engineer.dispose();
     this.crew.pilot.dispose();
   }
+}
+
+/**
+ * A small text label for the cruise map.
+ *
+ * The heliocentric view is a diagram, and an unlabelled diagram of four white
+ * dots is not readable. The sprite is drawn to a canvas rather than added as a
+ * DOM overlay so it moves with the body it names, at map scale, with no
+ * per-frame projection maths.
+ */
+function mapLabel(text: string, bodyRadius: number, color = 0xdce8f4): THREE.Sprite {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size / 4;
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = '600 40px "JetBrains Mono", ui-monospace, monospace';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, size / 2, size / 8);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: tex,
+      color,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      toneMapped: false,
+      opacity: 0.85,
+    }),
+  );
+  sprite.renderOrder = 30;
+  // Sat just clear of the disc, sized so it stays legible without swamping it.
+  sprite.scale.set(bodyRadius * 7.2, bodyRadius * 1.8, 1);
+  sprite.position.y = bodyRadius * 2.1;
+  return sprite;
+}
+
+/** Two decimal places, so the harness log stays readable. */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

@@ -23,9 +23,11 @@ const consoleErrors = [];
 async function main() {
   await mkdir(OUT, { recursive: true });
 
-  // Serve the real app.
+  // Serve the real app. Hot reload is switched off: a full pass takes over ten
+  // minutes, and a source edit made while one is in flight would otherwise
+  // reload the page mid-flight and destroy the run.
   const server = await createServer({
-    server: { port: 5199, host: '127.0.0.1' },
+    server: { port: 5199, host: '127.0.0.1', hmr: false, watch: null },
     logLevel: 'error',
   });
   await server.listen();
@@ -65,8 +67,11 @@ async function main() {
   const shot = async (name, note = '') => {
     const file = path.join(OUT, `${String(shots.length).padStart(2, '0')}-${name}.png`);
     await page.screenshot({ path: file });
-    shots.push({ name, file, note });
-    console.log(`  captured ${name}`);
+    // A screenshot alone cannot say *why* a frame is empty, so every shot also
+    // records where the camera, the vehicle and the ground actually were.
+    const debug = await page.evaluate(() => window.orbital?.debugSnapshot?.() ?? null);
+    shots.push({ name, file, note, debug });
+    console.log(`  captured ${name} ${debug ? JSON.stringify(debug) : ''}`);
   };
 
   // ---- 1. Main menu ----
@@ -129,17 +134,34 @@ async function main() {
     return `TIMEOUT(${await phase()})`;
   };
 
-  // ---- The opening cinematic, sampled while it plays ----
-  for (const [wait, name, note] of [
-    [3000, 'cine-establishing', 'Fade-in on the spaceport at dawn'],
-    [4000, 'cine-wide', 'Wide establishing shot, vehicle on the pad'],
-    [4000, 'cine-crew-walk', 'Both ducks walking toward the pad'],
-    [4000, 'cine-scale', 'Over-the-shoulder: duck foreground, rocket behind'],
-    [4000, 'cine-tilt-up', 'Tilt up the vehicle from ground level'],
-    [4000, 'cine-engines', 'Low angle on the engine section'],
+  // ---- The opening cinematic, sampled on the sequence's own clock ----
+  // Not on wall clock: this browser renders in software at a fraction of real
+  // speed, so a fixed delay photographs whichever shot happens to be up rather
+  // than the one being checked. Each capture waits for the timeline to reach
+  // the beat it is meant to document.
+  const waitForCinematicTime = async (t, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const now = await page.evaluate(
+        () => window.orbital?.debugSnapshot?.()?.cinematicTime ?? null,
+      );
+      // Null means the sequence has finished and been torn down.
+      if (now === null || now >= t) return now;
+      await page.waitForTimeout(250);
+    }
+    return null;
+  };
+
+  for (const [at, name, note] of [
+    [2.0, 'cine-establishing', 'Fade-in on the spaceport at dawn'],
+    [5.0, 'cine-wide', 'Wide establishing shot, vehicle on the pad'],
+    [9.0, 'cine-crew-walk', 'Both ducks walking toward the pad'],
+    [13.5, 'cine-scale', 'Over-the-shoulder: duck foreground, rocket behind'],
+    [20.5, 'cine-tilt-up', 'Tilt up the vehicle from ground level'],
+    [25.5, 'cine-engines', 'Low angle on the engine section'],
   ]) {
-    await page.waitForTimeout(wait);
-    await shot(name, note);
+    const reached = await waitForCinematicTime(at);
+    await shot(name, `${note} (t=${reached ?? 'ended'})`);
   }
 
   console.log('  waiting for COUNTDOWN…');
@@ -182,9 +204,12 @@ async function main() {
   await setWarp('50×');
   console.log('  waiting for ORBIT…');
   console.log('  phase:', await waitForPhase(['ORBIT'], 240_000));
+  // The simulation drops to real time on insertion; give the hero shot a moment
+  // to settle before photographing it, or the frame catches a mid-blend camera.
+  await page.waitForTimeout(4000);
   await shot('orbit', 'Orbit achieved');
 
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(8000);
   await shot('orbit-payload', 'On station');
 
   // ---- Interplanetary cruise ----
@@ -198,6 +223,18 @@ async function main() {
   await shot('cruise-late', 'Later in the cruise');
 
   // ---- Mars ----
+  // From here on the frame is a real 3D place rather than a schematic, so the
+  // render-frame numbers are sampled continuously and not only at each shot.
+  const trace = [];
+  const sampler = setInterval(() => {
+    page
+      .evaluate(() => window.orbital?.debugSnapshot?.() ?? null)
+      .then((d) => {
+        if (d && d.mode === 'mars') trace.push(d);
+      })
+      .catch(() => {});
+  }, 2000);
+
   console.log('  waiting for ENTRY…');
   console.log('  phase:', await waitForPhase(['ENTRY', 'MARS_APPROACH'], 300_000));
   await shot('mars-approach', 'Mars arrival');
@@ -205,23 +242,39 @@ async function main() {
   await page.waitForTimeout(4000);
   await shot('entry', 'Atmospheric entry — plasma');
 
+  // Entry, descent and landing run at real time by design, and this browser
+  // renders the Martian scene at a couple of frames a second — so the mission
+  // clock crawls against the wall clock here. A modest warp keeps the pass to a
+  // sane length without skipping the beats being photographed.
+  await setWarp('5×');
+
   console.log('  waiting for DESCENT…');
-  console.log('  phase:', await waitForPhase(['DESCENT'], 180_000));
+  console.log('  phase:', await waitForPhase(['DESCENT'], 420_000));
+  await setWarp('1×');
   await page.waitForTimeout(2500);
   await shot('descent', 'Descent under parachute');
 
   console.log('  waiting for LANDING…');
-  console.log('  phase:', await waitForPhase(['LANDING'], 180_000));
+  console.log('  phase:', await waitForPhase(['LANDING'], 420_000));
   await page.waitForTimeout(2000);
   await shot('landing', 'Powered descent and dust');
 
   console.log('  waiting for LANDED…');
-  console.log('  phase:', await waitForPhase(['LANDED', 'COMPLETE'], 180_000));
+  console.log('  phase:', await waitForPhase(['LANDED', 'COMPLETE'], 420_000));
   await page.waitForTimeout(3000);
   await shot('landed', 'On the surface');
 
   await page.waitForTimeout(12000);
   await shot('result', 'Mission result card');
+  clearInterval(sampler);
+  console.log(`\n--- mars render-frame trace (${trace.length} samples) ---`);
+  for (const t of trace) {
+    console.log(
+      `    alt=${t.altitude} veh=[${t.vehicle}] cam=[${t.camera}] d=${t.cameraToVehicle} ` +
+        `groundVeh=${t.groundUnderVehicle} groundCam=${t.groundUnderCamera} ` +
+        `origin=[${t.marsOrigin}]${t.marsOriginLocked ? ' LOCKED' : ''}`,
+    );
+  }
 
   // ---- Diagnostics dump ----
   const state = await page.evaluate(() => {

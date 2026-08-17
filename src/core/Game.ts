@@ -54,6 +54,8 @@ export class Game {
   private missionScene: MissionScene | null = null;
   private sim: MissionSim | null = null;
   private missionDiagnostics: DiagnosticOverlay | null = null;
+  /** Whether the flown trail has been restarted for the Martian frame. */
+  private marsTrailReset = false;
 
   private cinematic: Timeline | null = null;
   private ascentCoverage: CoverageHandle | null = null;
@@ -154,7 +156,11 @@ export class Game {
           ? this.buildScene?.scene
           : null;
 
-    if (scene) this.renderer.render(scene, this.director.camera);
+    if (scene) {
+      const farScale =
+        this.screen === 'mission' ? (this.missionScene?.farSpaceScale() ?? 0) : 0;
+      this.renderer.render(scene, this.director.camera, farScale);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -195,12 +201,18 @@ export class Game {
     this.audio.setAmbience('workshop');
 
     // Frame the vehicle in the bay.
+    //
+    // The camera has to sit *inside* the hall. The bay is 58 m across and its
+    // wall columns run floor to roof, so a camera parked 38 m off the centre
+    // line was outside the building looking at the vehicle through a picket
+    // fence of structural steel. This viewpoint is in the aisle, and the lens
+    // is wide enough to hold a tall stack from a distance the walls allow.
     const focus = this.buildScene.focusPoint(new THREE.Vector3());
     this.director.setClipRange(0.35, 12_000);
     this.director.snapTo(
-      focus.clone().add(new THREE.Vector3(38, 12, 52)),
+      focus.clone().add(new THREE.Vector3(19, 9, 39)),
       focus,
-      42,
+      54,
     );
     this.director.enterFreeCamera(
       () => this.buildScene!.focusPoint(new THREE.Vector3()),
@@ -456,6 +468,15 @@ export class Game {
     // ---- Diagnostics ----
     if (this.missionDiagnostics) {
       this.missionDiagnostics.update(dt, sim.vehicle, sim.activeFlight());
+      // The flown trail is in launch-site metres. In the heliocentric map view
+      // those coordinates mean nothing, and the line was drawing itself across
+      // the solar system — so it is dropped for the duration of the cruise and
+      // restarted at Mars.
+      this.missionDiagnostics.setTrajectoryVisible(scene.currentMode !== 'cruise');
+      if (scene.currentMode === 'mars' && !this.marsTrailReset) {
+        this.marsTrailReset = true;
+        this.missionDiagnostics.clearTrajectory();
+      }
     }
 
     // ---- Audio ----
@@ -515,6 +536,18 @@ export class Game {
       this.audio.isMuted,
       this.availableTimeScales(),
     );
+  }
+
+  /** Render-frame state for the headless visual harness (tools/visual-test.mjs). */
+  debugSnapshot(): Record<string, unknown> | null {
+    if (!this.missionScene) return null;
+    return {
+      ...this.missionScene.debugSnapshot(),
+      // The harness samples the opening sequence by *its* clock rather than by
+      // wall clock: a software renderer runs the game at a fraction of real
+      // speed, and a fixed wall-clock delay would photograph the wrong shot.
+      cinematicTime: this.cinematic ? Math.round(this.cinematic.time * 10) / 10 : null,
+    };
   }
 
   private toggleMute(): void {
@@ -603,6 +636,7 @@ export class Game {
     this.cinematic = null;
     this.replayTicker = null;
 
+    this.marsTrailReset = false;
     this.missionDiagnostics?.dispose();
     this.missionDiagnostics = null;
 
