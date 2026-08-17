@@ -830,8 +830,17 @@ export class MissionScene {
 
     // Aerial perspective thins out with height, the same way it does on the
     // climb from Earth — from orbit there is nothing between camera and ground.
+    //
+    // Falling off on a scale height rather than ramping to a floor. The floor
+    // was 0.000012, which sounds like nothing and is not: over the hundred-odd
+    // kilometre sight line of an arrival shot it still reached three quarters
+    // extinction, so the planet photographed as a smooth brown card at exactly
+    // the moment the spec wants it to read as a world (§32, §33). Mars's
+    // atmosphere has a scale height around eleven kilometres and essentially
+    // all of it is underneath the vehicle by entry interface.
     if (this.scene.fog instanceof THREE.FogExp2) {
-      this.scene.fog.density = lerp(0.000055, 0.000012, clamp(cameraAltitude / 12_000, 0, 1));
+      this.scene.fog.density =
+        0.000055 * Math.exp(-Math.max(cameraAltitude, 0) / 11_000);
     }
 
     // Sky and shadows track the vehicle.
