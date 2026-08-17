@@ -564,8 +564,17 @@ export class Game {
   /** Render-frame state for the headless visual harness (tools/visual-test.mjs). */
   debugSnapshot(): Record<string, unknown> | null {
     if (!this.missionScene) return null;
+    // Where the vehicle lands on screen, in normalised device coordinates:
+    // |x| and |y| under 1 means it is inside the frame. A screenshot can show
+    // that a frame is empty; this says whether the subject was even pointed at.
+    const ndc = this.missionScene
+      .vehiclePosition(new THREE.Vector3())
+      .project(this.director.camera);
+
     return {
       ...this.missionScene.debugSnapshot(),
+      screen: [Math.round(ndc.x * 100) / 100, Math.round(ndc.y * 100) / 100],
+      inFrame: Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1 && ndc.z < 1,
       // The harness samples the opening sequence by *its* clock rather than by
       // wall clock: a software renderer runs the game at a fraction of real
       // speed, and a fixed wall-clock delay would photograph the wrong shot.

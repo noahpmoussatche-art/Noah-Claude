@@ -87,13 +87,19 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
     }
   }
 
+  /**
+   * The large-scale part of the elevation: regional slopes and eroded highland
+   * ridges, both of which vary over kilometres. This is what the far field is
+   * built from — the finer terms below it are far under that mesh's sampling
+   * rate and would only alias into noise.
+   */
+  const coarseHeightAt = (x: number, z: number): number =>
+    noise.fbm(x * 0.00042, z * 0.00042, 4) * 130 +
+    noise.ridged(x * 0.0016, z * 0.0016, 5) * 34;
+
   /** Elevation at a point, metres. Shared by the mesh and by object placement. */
   const heightAt = (x: number, z: number): number => {
-    // Regional relief: broad, low-frequency slopes.
-    let h = noise.fbm(x * 0.00042, z * 0.00042, 4) * 130;
-
-    // Eroded highland ridges — the sharp crests that make Mars look ancient.
-    h += noise.ridged(x * 0.0016, z * 0.0016, 5) * 34;
+    let h = coarseHeightAt(x, z);
 
     // Mid-scale dunes and undulation.
     h += noise.fbm(x * 0.006, z * 0.006, 4) * 6.5;
@@ -184,7 +190,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   // there a 9 km patch reads as a square plate floating in the sky. The far
   // field costs one coarse mesh and turns that plate back into a planet.
   // -------------------------------------------------------------------------
-  ground.add(buildFarField(heightAt, lowColor, midColor, darkColor, detail));
+  ground.add(buildFarField(heightAt, coarseHeightAt, lowColor, midColor, darkColor, detail));
 
   // -------------------------------------------------------------------------
   // Distant relief: a ring of mesas and mountains beyond the terrain patch, so
@@ -205,7 +211,12 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
         if (p.getY(v) > h * 0.2) p.setY(v, h * 0.3);
       }
     }
-    g.translate(Math.cos(a) * d, h * 0.42, Math.sin(a) * d);
+    // Sat on the ground rather than on the datum: out here the regional slopes
+    // are worth a couple of hundred metres, and a mesa pinned to zero either
+    // floats above the plain or sinks into it.
+    const mx = Math.cos(a) * d;
+    const mz = Math.sin(a) * d;
+    g.translate(mx, coarseHeightAt(mx, mz) + h * 0.42, mz);
     distant.push(g);
   }
   const distantMesh = mesh(
@@ -339,6 +350,7 @@ export function updateMarsDust(
  */
 function buildFarField(
   heightAt: (x: number, z: number) => number,
+  coarseHeightAt: (x: number, z: number) => number,
   lowColor: THREE.Color,
   midColor: THREE.Color,
   darkColor: THREE.Color,
@@ -359,17 +371,19 @@ function buildFarField(
     // Geometric spacing: fine at the seam, coarse at the horizon.
     const t = r / rings;
     const radius = inner * Math.pow(outer / inner, t);
-    // Full relief until past the corner of the square patch, so the two meshes
-    // agree everywhere they overlap; then fade it out with distance, because
-    // out there the coarse sampling would alias it into noise.
+    // Blend from the full height function to its large-scale part alone. What
+    // it must *not* do is fade toward zero: the landing site can sit seventy
+    // metres below the datum, and a far field that flattened to zero then hung
+    // over the camera as a dark slab across the whole sky.
     const fadeStart = TERRAIN_SIZE * 0.75;
-    const relief = clamp(1 - (radius - fadeStart) / (TERRAIN_SIZE * 1.4), 0, 1);
+    const detailWeight = clamp(1 - (radius - fadeStart) / (TERRAIN_SIZE * 1.4), 0, 1);
 
     for (let s = 0; s <= segments; s++) {
       const a = (s / segments) * Math.PI * 2;
       const x = Math.cos(a) * radius;
       const z = Math.sin(a) * radius;
-      const h = heightAt(x, z) * relief;
+      const coarse = coarseHeightAt(x, z);
+      const h = coarse + (heightAt(x, z) - coarse) * detailWeight;
       positions.push(x, h, z);
 
       const patch = detail.fbm(x * 0.0009, z * 0.0009, 3) * 0.5 + 0.5;
