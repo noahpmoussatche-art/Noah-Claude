@@ -545,8 +545,10 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
   const { scene, director, audio, say, slate, setCinematicMode } = ctx;
   const sim = scene.sim;
 
-  const vehicle = (): THREE.Vector3 => scene.vehiclePosition(new THREE.Vector3());
-  const vehicleMid = (): THREE.Vector3 => scene.vehicleMidpoint(new THREE.Vector3());
+  // Everything on this side of the mission frames the *surviving* hardware
+  // rather than the launch vehicle's origin — see MissionScene.vehicleCentre.
+  const vehicle = (): THREE.Vector3 => scene.vehicleCentre(new THREE.Vector3());
+  const vehicleMid = vehicle;
 
   const unsubscribe = sim.on((e) => {
     switch (e.type) {

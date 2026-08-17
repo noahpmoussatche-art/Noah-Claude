@@ -239,6 +239,22 @@ export class MissionScene {
     return target.addScaledVector(up, this.sim.vehicle.height * 0.45);
   }
 
+  /**
+   * World position of the hardware that is still attached.
+   *
+   * The vehicle's origin is the bottom of the stack it was launched as, and the
+   * physics keeps using it — but by the time a lander is at Mars, everything
+   * between that origin and the surviving hardware has been staged away, and
+   * the remaining vehicle can be fifty metres from the point the cameras were
+   * framing. Which is why entry and descent photographed as empty sky: the shot
+   * was centred, correctly, on nothing at all. The centre of mass is already
+   * computed every step over exactly the live parts, so it is the right subject.
+   */
+  vehicleCentre(target = new THREE.Vector3()): THREE.Vector3 {
+    target.copy(this.sim.vehicle.massProperties().centreOfMass);
+    return this.sim.vehicle.root.localToWorld(target);
+  }
+
   /** World position of the engine section. */
   vehicleBase(target = new THREE.Vector3()): THREE.Vector3 {
     return this.vehiclePosition(target);
@@ -678,8 +694,20 @@ export class MissionScene {
     // local frame anchored at the landing site the correct height is simply the
     // altitude above the datum, plus whatever relief the terrain has there.
     const groundY = mars.heightAt(localX, localZ);
-    this.sim.vehicle.root.position.set(localX, altitude + groundY, localZ);
     this.sim.vehicle.root.quaternion.copy(flight.state.orientation);
+
+    // Place the *surviving* stack, not the launch vehicle's origin. Everything
+    // below the lander staged away on the way here, so the origin now floats
+    // tens of metres beneath it; without this the lander touches down with its
+    // feet that far above the regolith.
+    this._v
+      .set(0, this.sim.vehicle.liveBaseHeight(), 0)
+      .applyQuaternion(flight.state.orientation);
+    this.sim.vehicle.root.position.set(
+      localX - this._v.x,
+      altitude + groundY - this._v.y,
+      localZ - this._v.z,
+    );
 
     if (sim.shake > 0.001) {
       const t = sim.missionTime;
@@ -689,6 +717,10 @@ export class MissionScene {
 
     const rho = density(MARS, altitude);
 
+    // The plasma shell is parented to the vehicle's origin, which after staging
+    // is metres away from the capsule it is supposed to wrap.
+    this.plasma.group.position.copy(this.sim.vehicle.massProperties().centreOfMass);
+
     // ---- Entry plasma driven by the simulated heat flux (spec §34) ----
     const heatFlux = sim.telemetry.heatFlux;
     // Normalise against a typical Mars peak of ~1.2 MW/m^2.
@@ -697,7 +729,7 @@ export class MissionScene {
     const wakeDir = flight.state.velocity.clone().normalize().negate();
     this.plasma.update(
       dt,
-      this.vehicleBase(new THREE.Vector3()),
+      this.vehicleCentre(new THREE.Vector3()),
       wakeDir,
       sim.telemetry.airspeed,
       Math.max(this.sim.vehicle.maxDiameter / 2, 1),

@@ -551,6 +551,20 @@ export class Vehicle {
     return group;
   }
 
+  /**
+   * Local height of the bottom of whatever is still attached, metres.
+   *
+   * Zero for a complete stack, and tens of metres for a lander whose booster
+   * stages are long gone — the vehicle's origin stays at the base of the
+   * vehicle as *launched*, so a lander placed by that origin would stand on the
+   * surface with its feet fifty metres in the air.
+   */
+  liveBaseHeight(): number {
+    let lowest = Infinity;
+    for (const p of this.activeParts()) lowest = Math.min(lowest, p.position.y);
+    return Number.isFinite(lowest) ? lowest : 0;
+  }
+
   /** The lowest stage index that has not yet been separated. */
   currentStage(): number {
     for (const s of this.stages) if (!s.separated) return s.index;
