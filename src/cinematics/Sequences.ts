@@ -541,6 +541,13 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
  * deploys, which depends on the vehicle reaching the right Mach number at the
  * right altitude.
  */
+/**
+ * How far a deployed main canopy rides above the hardware it is holding up,
+ * metres: a full riser length plus the dome itself. Used to frame the descent
+ * so both ends of the system stay in shot (spec §35).
+ */
+const CHUTE_RISE = 27;
+
 export function attachMarsCoverage(ctx: CinematicContext): () => void {
   const { scene, director, audio, say, slate, setCinematicMode } = ctx;
   const sim = scene.sim;
@@ -599,18 +606,25 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         // Pull back so the canopy has room to inflate in frame (spec §35), and
         // sit above the vehicle looking down, so Mars is underneath it rather
         // than off-camera — the shot has to say "descending toward a planet".
-        director.play(
-          // Far enough back to hold the canopy as well as the lander. The dome
-          // rides a full riser length above the vehicle and is another ten
-          // metres across on top of that, so a shot framed on the lander alone
-          // catches the suspension lines running off the top of frame and
-          // nothing else.
-          trackingShot(vehicleMid, new THREE.Vector3(62, 52, 74), {
-            fov: 46,
-            blend: 0.5,
-            stiffness: 2.6,
-          }),
-        );
+        director.play({
+          // Framed on the canopy-and-lander system, not on the lander.
+          //
+          // Standing back far enough was not sufficient on its own: the camera
+          // reaches this shot descending fast and arrives well inside its
+          // nominal stand-off, and a frame centred on the lander then puts a
+          // 21.5 m dome riding 27 m overhead clean out of the top — which is
+          // why the descent shot photographed as suspension lines converging on
+          // nothing. Aiming at the midpoint keeps both ends in shot whatever
+          // distance the camera has actually managed to reach.
+          kind: 'tracking',
+          target: vehicleMid,
+          lookAt: () => vehicleMid().add(new THREE.Vector3(0, CHUTE_RISE * 0.5, 0)),
+          position: () => vehicleMid().add(new THREE.Vector3(62, 52, 74)),
+          fov: 52,
+          blend: 0.5,
+          stiffness: 2.6,
+          handheld: 0.35,
+        });
         break;
 
       case 'chute-full':
