@@ -641,8 +641,10 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
           fovAt: () => {
             const v = vehicle();
             const range = Math.max(v.distanceTo(new THREE.Vector3(px, py, pz)), 1);
-            // Frame about four vehicle lengths across, whatever the range.
-            const want = Math.max(scene.sim.vehicle.height, 6) * 2.2;
+            // Frame a few lengths of the *surviving* vehicle, whatever the
+            // range. Sized from the vehicle as designed, this stayed pinned at
+            // its widest setting and the lander was still a speck.
+            const want = Math.max(scene.sim.vehicle.liveSpan(), 4) * 2.4;
             return clamp(
               THREE.MathUtils.radToDeg(2 * Math.atan(want / range)),
               9,

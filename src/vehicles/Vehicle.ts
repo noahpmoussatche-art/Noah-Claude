@@ -565,6 +565,26 @@ export class Vehicle {
     return Number.isFinite(lowest) ? lowest : 0;
   }
 
+  /**
+   * Vertical extent of whatever is still attached, metres.
+   *
+   * `height` is the vehicle as designed and stays 58 m for a lander that is now
+   * six — which is the wrong number to frame a shot around once the boosters
+   * are gone.
+   */
+  liveSpan(): number {
+    let lowest = Infinity;
+    let highest = -Infinity;
+    for (const p of this.activeParts()) {
+      lowest = Math.min(lowest, p.position.y);
+      highest = Math.max(highest, p.position.y);
+    }
+    if (!Number.isFinite(lowest)) return Math.max(this.maxDiameter, 1);
+    // Part positions are the part's base, so the topmost part's own length is
+    // missing; the stack diameter is a serviceable stand-in for it.
+    return highest - lowest + this.maxDiameter;
+  }
+
   /** The lowest stage index that has not yet been separated. */
   currentStage(): number {
     for (const s of this.stages) if (!s.separated) return s.index;
