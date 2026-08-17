@@ -260,6 +260,32 @@ export class MissionScene {
     return this.vehiclePosition(target);
   }
 
+  /**
+   * Radius of the hardware that is still attached, about `vehicleCentre`.
+   *
+   * A camera that frames using the launch vehicle's full height stands back far
+   * enough for a fifty-eight metre stack — which, once everything but a four
+   * metre lander has been staged away, leaves the subject as a handful of pixels
+   * in the middle of the frame. That is exactly how the post-landing shot came
+   * out: a red plain with a speck on it. Framing has to follow what is left.
+   */
+  framingRadius(): number {
+    const parts = this.sim.vehicle.activeParts();
+    if (parts.length === 0) return Math.max(this.sim.vehicle.height * 0.5, 4);
+
+    const com = this.sim.vehicle.massProperties().centreOfMass;
+    let r = 0;
+    for (const p of parts) {
+      const d = p.def.dimensions;
+      // Half-diagonal of the part's own box, plus its offset from the centre.
+      const half = Math.hypot(d[0], d[1], d[2]) * 0.5;
+      const y = p.def.engine ? p.position.y - d[1] / 2 : p.position.y + d[1] / 2;
+      const offset = Math.hypot(p.position.x - com.x, y - com.y, p.position.z - com.z);
+      r = Math.max(r, offset + half);
+    }
+    return Math.max(r, 2.5);
+  }
+
   /** Mount transform for onboard cameras. */
   vehicleMount(): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
     return {

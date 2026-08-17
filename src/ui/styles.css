@@ -1019,13 +1019,22 @@ body.cinematic .hud-hideable {
    Main menu
    -------------------------------------------------------------------------- */
 
+/*
+ * The title screen sits *over* the 3D title vignette rather than replacing it,
+ * so the first thing on screen is the two characters (spec §24, §78). The panel
+ * is therefore anchored to one side and the page is only darkened enough behind
+ * the text to keep it legible — never enough to hide the shot.
+ */
 #menu {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   z-index: 95;
-  background: linear-gradient(180deg, #05080e 0%, #0a1420 60%, #12202e 100%);
+  background:
+    linear-gradient(90deg, rgba(4, 7, 12, 0) 34%, rgba(4, 7, 12, 0.62) 58%, rgba(4, 7, 12, 0.9) 100%),
+    linear-gradient(0deg, rgba(4, 7, 12, 0.55) 0%, rgba(4, 7, 12, 0) 42%);
 }
 
 #menu.hidden {
@@ -1033,15 +1042,10 @@ body.cinematic .hud-hideable {
 }
 
 #menu .inner {
-  text-align: center;
-  max-width: 680px;
-  padding: 0 24px;
-}
-
-#menu .mark {
-  font-size: 62px;
-  margin-bottom: 10px;
-  letter-spacing: 0.1em;
+  text-align: left;
+  width: min(560px, 52vw);
+  padding: 0 clamp(24px, 4vw, 64px) 0 0;
+  margin-right: clamp(12px, 3vw, 48px);
 }
 
 #menu h1 {

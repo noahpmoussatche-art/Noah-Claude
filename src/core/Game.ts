@@ -24,6 +24,7 @@ import {
 } from '../cinematics/Sequences';
 import { Timeline } from '../cinematics/Timeline';
 import { BuildScene } from '../scenes/BuildScene';
+import { MenuScene } from '../scenes/MenuScene';
 import { MissionScene } from '../scenes/MissionScene';
 import { MissionSim } from '../simulation/MissionSim';
 import { analyseVehicle, type VehicleAnalysis } from '../simulation/SystemCheck';
@@ -51,6 +52,7 @@ export class Game {
   private analysis: VehicleAnalysis | null = null;
 
   private buildScene: BuildScene | null = null;
+  private menuScene: MenuScene | null = null;
   private missionScene: MissionScene | null = null;
   private sim: MissionSim | null = null;
   private missionDiagnostics: DiagnosticOverlay | null = null;
@@ -112,10 +114,33 @@ export class Game {
 
   start(): void {
     this.ui.hideLoading();
-    this.ui.showMenu(true);
+    this.enterMenu();
     this.running = true;
     this.lastFrame = performance.now();
     requestAnimationFrame(this.loop);
+  }
+
+  /**
+   * Shows the title screen. The menu is a real 3D shot of the two characters
+   * (spec §24, §78) rather than a pair of emoji over a black page, so entering
+   * it means building and framing a scene, not just unhiding a panel.
+   */
+  private enterMenu(): void {
+    this.screen = 'menu';
+    if (!this.menuScene) this.menuScene = new MenuScene();
+
+    const scene = this.menuScene;
+    this.director.setClipRange(0.05, 20_000);
+    this.director.play({
+      kind: 'wide',
+      target: () => scene.focusPoint(new THREE.Vector3()),
+      position: () => scene.cameraPosition(new THREE.Vector3()),
+      fov: 34,
+      blend: 0,
+      stiffness: 5,
+      handheld: 0.3,
+    });
+    this.ui.showMenu(true);
   }
 
   private readonly loop = (now: number): void => {
@@ -143,6 +168,9 @@ export class Game {
       case 'mission':
         this.updateMission(dt);
         break;
+      case 'menu':
+        this.menuScene?.update(dt);
+        break;
       default:
         break;
     }
@@ -154,7 +182,7 @@ export class Game {
         ? this.missionScene?.scene
         : this.screen === 'build'
           ? this.buildScene?.scene
-          : null;
+          : this.menuScene?.scene;
 
     if (scene) {
       const farScale =
@@ -476,9 +504,12 @@ export class Game {
     // Once the opening sequence is done and no shot is queued, hand the camera
     // to the player (spec §49) framing the vehicle.
     if (!this.cinematic && !this.director.activeShot && !this.director.isFree) {
+      // Frame what is still attached, at a distance set by its size — not the
+      // launch stack's origin at the launch stack's height. After staging those
+      // are two different places and two very different scales.
       this.director.enterFreeCamera(
-        () => scene.vehicleMidpoint(new THREE.Vector3()),
-        Math.max(sim.vehicle.height * 1.6, 40),
+        () => scene.vehicleCentre(new THREE.Vector3()),
+        clamp(scene.framingRadius() * 3.2, 12, 600),
       );
     }
 
@@ -710,8 +741,7 @@ export class Game {
     this.ui.showHud(false);
     this.ui.setCinematicMode(false);
     this.audio.setAmbience('none');
-    this.screen = 'menu';
-    this.ui.showMenu(true);
+    this.enterMenu();
   }
 
   // -------------------------------------------------------------------------
@@ -729,8 +759,9 @@ export class Game {
       if (!this.cinematic && this.screen === 'mission' && this.missionScene) {
         const scene = this.missionScene;
         if (!this.director.isFree) {
-          this.director.enterFreeCamera(() =>
-            scene.vehicleMidpoint(new THREE.Vector3()),
+          this.director.enterFreeCamera(
+            () => scene.vehicleCentre(new THREE.Vector3()),
+            clamp(scene.framingRadius() * 3.2, 12, 600),
           );
         }
       }

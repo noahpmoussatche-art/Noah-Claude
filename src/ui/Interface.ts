@@ -163,7 +163,9 @@ export class Interface {
     this.menu.classList.add('hidden');
 
     const inner = el('div', 'inner');
-    inner.appendChild(el('div', 'mark', '🦆🦆'));
+    // No emoji mark here: the two characters are on screen behind this panel as
+    // actual models (MenuScene), which is what spec §24 asks for — they are
+    // characters, not icons, and least of all typography.
     inner.appendChild(el('h1', undefined, 'ORBITAL'));
     inner.appendChild(el('div', 'agency', 'ENGINEERING · ORBITAL SPACE AGENCY'));
     inner.appendChild(
