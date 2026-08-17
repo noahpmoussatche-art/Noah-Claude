@@ -315,7 +315,12 @@ export function buildPlanetGlobe(
 
   // Atmospheric rim: brighter where the surface is edge-on to the camera.
   const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * (kind === 'earth' ? 1.045 : 1.02), 64, 40),
+    // The shell has to be the depth of a real atmosphere, not an artistic
+    // margin: at four and a half per cent of Earth's radius it reached 287 km
+    // up, so a spacecraft in a 230 km orbit sat *inside* it and the whole sky
+    // came out washed in blue. One point eight per cent is about 115 km, which
+    // is where the atmosphere actually ends.
+    new THREE.SphereGeometry(radius * (kind === 'earth' ? 1.018 : 1.02), 64, 40),
     new THREE.ShaderMaterial({
       uniforms: {
         uColor: {

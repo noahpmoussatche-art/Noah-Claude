@@ -161,11 +161,16 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
   // vehicle filling the frame behind. This is the shot that sells the scale.
   tl.at(11.6, () => {
     director.play(
-      overShoulderShot(pilotPos, () => new THREE.Vector3(pad.x, pad.y + vehicleHeight * 0.5, pad.z), {
-        back: 3.4,
-        up: 0.55,
+      // The look-at sits low on the vehicle and the lens is wide, which is what
+      // keeps the duck in frame at all: a camera three metres behind a
+      // half-metre character cannot tilt up to a fifty-eight metre nose and
+      // still hold the character. The vehicle running out of the top of the
+      // frame is the point of the shot.
+      overShoulderShot(pilotPos, () => new THREE.Vector3(pad.x, pad.y + 7, pad.z), {
+        back: 3.0,
+        up: 0.35,
         side: 1.1,
-        fov: 46,
+        fov: 60,
         blend: 1.0,
       }),
     );
@@ -442,8 +447,9 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
         // The 1.6 is not slack: the near half of the orbit sits closer to the
         // camera than the projection's sine term assumes and lands lower in
         // frame than the far half. Measured against the rendered map, not
-        // guessed — at 1.45 the near limb of Mars's orbit clipped the bottom.
-        const halfHeight = MARS.orbitRadius * SPACE_VIEW_SCALE * Math.sin(elevation) * 1.6;
+        // guessed — at 1.45 the near limb of Mars's orbit fell clean out of frame,
+        // and at 1.6 the planet itself sat on the bottom edge.
+        const halfHeight = MARS.orbitRadius * SPACE_VIEW_SCALE * Math.sin(elevation) * 1.75;
         const distance = halfHeight / Math.tan(THREE.MathUtils.degToRad(fov / 2));
         director.setClipRange(distance * 0.01, distance * 20);
         director.play({

@@ -104,7 +104,21 @@ texture is drawn to a canvas at load time.
 - **Mars** is a displaced terrain built from layered noise with carved craters,
   raised ejecta rims, central peaks, instanced boulder fields, wind-blown dust
   and a butterscotch sky with the blue aureole around the sun that Mars actually
-  has.
+  has, carried out to the horizon by a coarse far field so the detailed patch
+  never reads as a plate floating in the sky.
+- **Planets from orbit** are drawn in a second render pass. A world eight
+  thousand kilometres across and a fifty-metre vehicle cannot share one depth
+  buffer, so the planet is drawn first through a camera that shares the main
+  one's orientation and lens but sits at a scaled-down position — every angle is
+  preserved, so the parallax is right — and then the depth buffer is cleared and
+  the near world is drawn over it. The globe hangs one radius plus the current
+  altitude below the vehicle, which is what "below" means where the vehicle
+  actually is; the flat launch-site frame it flies in has long since parted
+  company with the curved planet by the time it reaches orbit.
+- **The camera** carries its subject's motion forward before damping, and is
+  bounded in how far it may trail. A plain damped follow lags by roughly speed
+  over stiffness, which is invisible on the pad and leaves a kilometre of empty
+  frame at atmospheric entry.
 
 ---
 
@@ -122,6 +136,12 @@ node tools/sweep.mjs "0.4,0.5"     # sweep the gravity-turn pitch programme
 The simulation harness flies all three missions in seconds with no rendering,
 which is what made the ascent and landing controllers tunable by measurement
 rather than by guesswork.
+
+The visual harness records the render frame's numbers — where the camera, the
+vehicle and the ground each are — alongside every screenshot, and samples the
+opening sequence on the sequence's own clock and the descent by altitude rather
+than by wall clock. A screenshot can show that a frame is empty; only the
+numbers say why.
 
 ---
 

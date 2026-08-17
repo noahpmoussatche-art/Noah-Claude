@@ -31,7 +31,9 @@ async function main() {
     logLevel: 'error',
   });
   await server.listen();
-  const url = 'http://127.0.0.1:5199/';
+  // Take the port Vite actually bound. It falls forward when 5199 is busy, and
+  // a hard-coded URL then silently drove the browser at *another* run's server.
+  const url = server.resolvedUrls?.local?.[0] ?? 'http://127.0.0.1:5199/';
   console.log(`serving ${url}`);
 
   const browser = await chromium.launch({

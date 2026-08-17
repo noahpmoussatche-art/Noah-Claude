@@ -461,6 +461,17 @@ export class MissionScene {
     this.crew.engineer.update(dt);
     this.crew.pilot.update(dt);
 
+    // The camera director runs after this and frames the vehicle by its world
+    // matrix — which three.js only refreshes during the render, i.e. one frame
+    // later. That staleness is nothing at walking pace and three hundred metres
+    // at five times warp on the way to orbit, which is what was leaving tracking
+    // shots pointed behind the vehicle. So the transforms just written are
+    // flushed here, for the handful of objects a camera can be asked to frame.
+    this.cruiseGroup?.updateMatrixWorld(true);
+    this.vehicleAnchor.updateMatrixWorld(true);
+    this.crew.engineer.object.updateMatrixWorld(true);
+    this.crew.pilot.object.updateMatrixWorld(true);
+
     // Shared effect systems.
     this.exhaust.update(dt);
     this.sparks.update(dt);
