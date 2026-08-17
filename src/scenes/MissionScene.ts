@@ -259,19 +259,25 @@ export class MissionScene {
     group.name = 'cruise-view';
 
     const S = SPACE_VIEW_SCALE;
+    // Map-view body sizes. At a true 1/40000 reduction a planet is a fraction
+    // of a pixel next to its own orbit, so bodies are drawn at a schematic size
+    // relative to the astronomical unit — the same convention every orrery
+    // uses. Distances remain to scale; only the discs are exaggerated.
+    const AU = 1.496e11 * S;
+    const bodyScale = AU * 0.022;
 
     // Sun at the origin.
-    this.cruiseSun = buildSun(6.96e8 * S * 0.12);
+    this.cruiseSun = buildSun(AU * 0.03);
     group.add(this.cruiseSun);
 
     const sunLight = new THREE.PointLight(0xfff0d8, 3.2, 0, 0);
     group.add(sunLight);
 
-    // Planets.
-    this.cruiseEarth = buildPlanetGlobe(EARTH.radius * S * 900, 'earth', 11);
+    // Planets, sized relative to each other so Mars still reads as the smaller.
+    this.cruiseEarth = buildPlanetGlobe(bodyScale, 'earth', 11);
     group.add(this.cruiseEarth);
 
-    this.cruiseMars = buildPlanetGlobe(MARS.radius * S * 900, 'mars', 23);
+    this.cruiseMars = buildPlanetGlobe(bodyScale * (MARS.radius / EARTH.radius), 'mars', 23);
     group.add(this.cruiseMars);
 
     // Orbits and the transfer trajectory (spec §31).
@@ -550,8 +556,12 @@ export class MissionScene {
 
     // ---- Vehicle transform ----
     flight.renderPosition(this._v);
-    // Place relative to the terrain: physics altitude 0 is the terrain datum.
-    this.sim.vehicle.root.position.set(this._v.x, this._v.y, this._v.z);
+    // The flight simulator measures altitude from the planet datum, but the
+    // rendered terrain has relief on top of it. Lifting the vehicle by the
+    // local ground height keeps "altitude zero" meaning "resting on the
+    // surface" — otherwise the lander touches down buried inside a hillside.
+    const groundY = mars.heightAt(this._v.x, this._v.z);
+    this.sim.vehicle.root.position.set(this._v.x, this._v.y + groundY, this._v.z);
     this.sim.vehicle.root.quaternion.copy(flight.state.orientation);
 
     if (sim.shake > 0.001) {
