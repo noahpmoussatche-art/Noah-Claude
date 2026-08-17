@@ -91,6 +91,13 @@ const HOLDDOWN_MARGIN = 1.02;
  */
 const MAX_SUBSTEPS_PER_FRAME = 400;
 
+/**
+ * Altitude at which the lander lets go of its parachute and lights the descent
+ * engine, metres. High enough that a canopy which has failed to slow the
+ * vehicle still leaves room for the engine to try.
+ */
+const CHUTE_RELEASE_ALTITUDE = 3_500;
+
 export class MissionSim {
   readonly mission: MissionDef;
   readonly vehicle: Vehicle;
@@ -816,9 +823,19 @@ export class MissionSim {
       const decel = this.availableDecel(sim);
       const stopDistance = decel > 0 ? (vDown * vDown) / (2 * decel) : Infinity;
 
+      // Hold for the parachute. The stopping distance is computed from the
+      // *current* speed, and at the moment the canopy opens the vehicle is
+      // still doing Mach two — so the criterion below was satisfied instantly,
+      // the burn lit at eleven kilometres and cut a parachute that had not yet
+      // done any work. The canopy keeps the vehicle until the release altitude;
+      // if it cannot slow it enough by then, the landing fails, which is the
+      // honest outcome.
+      const holdForChute =
+        this.fired.has('chute-deploy') && !this.chuteReleased && alt > CHUTE_RELEASE_ALTITUDE;
+
       // Generous margin over the theoretical minimum: a suicide burn with no
       // margin leaves nothing for the throttle to correct with.
-      if (alt < stopDistance * 2.5 + 100 && vDown > 4) {
+      if (!holdForChute && alt < stopDistance * 3.5 + 220 && vDown > 4) {
         this.emitOnce('landing-burn');
         this.state = MissionState.LANDING;
         // Cut the parachute as the engine lights, exactly as a real propulsive
@@ -848,12 +865,12 @@ export class MissionSim {
       const brakingCurve = (speedToKill: number): number => {
         const targetRate = Math.max(
           1.5,
-          0.8 * Math.sqrt(2 * safeDecel * Math.max(alt - 6, 0)),
+          0.5 * Math.sqrt(2 * safeDecel * Math.max(alt - 6, 0)),
         );
-        return clamp(0.2 + (speedToKill - targetRate) * 0.8, 0, 1);
+        return clamp(0.2 + (speedToKill - targetRate) * 2.4, 0, 1);
       };
 
-      if (horizontal > 4 && alt > 25) {
+      if (horizontal > 1.2 && alt > 30) {
         // Phase one: retrograde, cancelling drift and descent together.
         mode = 'landing-burn';
         throttle = brakingCurve(vRel.length());
