@@ -646,20 +646,34 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         // made the vehicle eight pixels, and standing close enough to see the
         // vehicle pointed the camera at empty sky.
         const standoff = 52;
-        const marker = vehicle();
-        const px = marker.x + standoff * 0.78;
-        const pz = marker.z + standoff * 0.62;
-        const py = scene.groundHeightAt(px, pz) + 2.4;
+        // Placed relative to where the lander *is*, re-evaluated each frame.
+        //
+        // Pinning the camera to the vehicle's position at burn start looked
+        // right for a ground camera and was not: powered descent begins around
+        // four hundred metres up and the lander still flies several hundred
+        // metres downrange before it touches. By touchdown the "fifty-two metre"
+        // standoff had become seven hundred, and the last shot of the mission
+        // was a speck on a plain with no horizon in frame. Holding the offset
+        // keeps it a camera standing on the surface near the landing point,
+        // which is what the shot was for.
+        const camAt = (): THREE.Vector3 => {
+          const v = vehicle();
+          const px = v.x + standoff * 0.78;
+          const pz = v.z + standoff * 0.62;
+          return new THREE.Vector3(px, scene.groundHeightAt(px, pz) + 2.4, pz);
+        };
         director.play({
           kind: 'ground',
           target: vehicle,
           blend: 1.0,
-          stiffness: 2.2,
+          // Loose, so the camera drifts to keep station rather than snapping
+          // sideways under the lander — it should still feel planted.
+          stiffness: 0.9,
           handheld: 0.7,
-          position: () => new THREE.Vector3(px, py, pz),
+          position: camAt,
           fovAt: () => {
             const v = vehicle();
-            const range = Math.max(v.distanceTo(new THREE.Vector3(px, py, pz)), 1);
+            const range = Math.max(v.distanceTo(camAt()), 1);
             // Frame a few lengths of the *surviving* vehicle, whatever the
             // range. Sized from the vehicle as designed, this stayed pinned at
             // its widest setting and the lander was still a speck.
