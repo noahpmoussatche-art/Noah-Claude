@@ -212,7 +212,7 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
       // the exhaust sees nothing but white.
       lowAngleShot(vehicleBase, {
         distance: 44,
-        height: 2.6,
+        height: 12,
         azimuth: 2.3,
         fov: 30,
         lookHeight: 9,
@@ -232,7 +232,7 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
     director.play(
       lowAngleShot(() => new THREE.Vector3(pad.x, pad.y, pad.z), {
         distance: 62,
-        height: 3.5,
+        height: 14,
         azimuth: 2.1,
         fov: 44,
         lookHeight: vehicleHeight * 0.45,
@@ -296,7 +296,7 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
         director.play(
           lowAngleShot(vehicle, {
             distance: 58,
-            height: 3,
+            height: 14,
             azimuth: 2.1,
             fov: 46,
             lookHeight: 22,

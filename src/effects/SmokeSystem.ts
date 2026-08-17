@@ -42,14 +42,14 @@ export interface GroundBlastConfig {
 export const PAD_EXHAUST: GroundBlastConfig = {
   color: new THREE.Color(0.84, 0.82, 0.8),
   highlight: new THREE.Color(0.97, 0.95, 0.9),
-  outflowSpeed: 32,
-  puffSize: 3.4,
-  growth: 5,
-  life: 6.5,
-  buoyancy: 2.2,
-  opacity: 0.3,
-  drag: 0.7,
-  rate: 80,
+  outflowSpeed: 28,
+  puffSize: 3,
+  growth: 4,
+  life: 5.5,
+  buoyancy: 1.4,
+  opacity: 0.22,
+  drag: 0.85,
+  rate: 70,
 };
 
 /** Mars surface: thin, fine, ochre dust thrown far and settling slowly. */
