@@ -122,7 +122,11 @@ export class MissionScene {
     // ---- Vehicle ----
     this.scene.add(this.vehicleAnchor);
     this.vehicleAnchor.add(sim.vehicle.root);
-    this.vehicleAnchor.position.copy(this.complex.padCentre);
+    // The anchor stays at the origin: the flight simulator's render position is
+    // already measured from the ground datum and includes the pad height, so
+    // offsetting the anchor as well would leave the vehicle hovering above the
+    // launch mount.
+    this.vehicleAnchor.position.set(0, 0, 0);
 
     // ---- One plume per nozzle (spec §10) ----
     for (const engine of sim.vehicle.engines) {
@@ -296,12 +300,19 @@ export class MissionScene {
     this.sim.vehicle.root.position.set(0, 0, 0);
     group.add(this.cruiseShip);
 
-    // A marker so the ship is findable even when the camera is far out.
-    const marker = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0x4fd08a, toneMapped: false }),
+    // At map scale a 60 m spacecraft is far below one pixel, so it also carries
+    // a marker sized for the view. The ship itself is still there at true scale
+    // underneath — zooming in finds it.
+    const marker = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        color: 0x4fd08a,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+      }),
     );
     marker.name = 'ship-marker';
+    marker.scale.setScalar(EARTH.orbitRadius * S * 0.012);
     this.cruiseShip.add(marker);
 
     this.cruiseGroup = group;
@@ -435,11 +446,11 @@ export class MissionScene {
         this.complex.padHeight * 0.2,
         this.sim.vehicle.root.position.z,
       );
-      this.padBlast.emit(dt, impact, throttle, proximity, 26);
+      this.padBlast.emit(dt, impact, throttle, proximity, 17);
 
       // The trench throws exhaust sideways from two fixed mouths.
       for (const mouth of this.complex.trenchMouths) {
-        this.padBlast.emit(dt, mouth, throttle * 0.8, proximity, 16);
+        this.padBlast.emit(dt, mouth, throttle * 0.7, proximity, 12);
       }
     }
     this.padBlast.update(dt);

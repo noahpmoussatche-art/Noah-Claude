@@ -88,8 +88,18 @@ export enum MissionState {
   MISSION_FAILED = 'MISSION_FAILED',
 }
 
-/** Time-warp steps offered to the player (spec §50). */
+/** Time-warp steps offered during powered and atmospheric flight (spec §50). */
 export const TIME_SCALES = [1, 5, 10, 50, 100, 1000] as const;
+
+/**
+ * Additional warp steps offered only while coasting or cruising.
+ *
+ * An interplanetary transfer is 255 days. At 1000x that is still six hours of
+ * real time, so the cruise needs its own range. The vehicle is genuinely
+ * integrated along the trajectory at every step — the warp changes how fast the
+ * clock runs, not whether the journey happens (spec §50).
+ */
+export const CRUISE_TIME_SCALES = [1, 1_000, 10_000, 100_000, 1_000_000] as const;
 
 /** Rendering layers, used to composite the far/near space views. */
 export const LAYER_DEFAULT = 0;

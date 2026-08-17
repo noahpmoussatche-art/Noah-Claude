@@ -26,7 +26,7 @@ import {
   trackingShot,
 } from './CameraDirector';
 import { Timeline, type DialogueLine } from './Timeline';
-import { MissionState } from '../data/constants';
+import { MissionState, SPACE_VIEW_SCALE } from '../data/constants';
 
 export interface CinematicContext {
   readonly scene: MissionScene;
@@ -40,6 +40,13 @@ export interface CinematicContext {
   readonly fade: (to: number, seconds: number) => void;
   /** Enables or disables the cinematic UI mode (spec §62, §63). */
   readonly setCinematicMode: (on: boolean) => void;
+  /**
+   * Starts the terminal count. The sequence calls this itself rather than the
+   * game starting it on a wall-clock timer: tying it to the timeline is what
+   * keeps ignition and liftoff landing on their intended beats on a slow
+   * machine as well as a fast one.
+   */
+  readonly startCountdown: () => void;
 }
 
 /**
@@ -47,7 +54,8 @@ export interface CinematicContext {
  * running in parallel with the real countdown.
  */
 export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
-  const { scene, director, audio, say, slate, fade, setCinematicMode } = ctx;
+  const { scene, director, audio, say, slate, fade, setCinematicMode, startCountdown } =
+    ctx;
   const tl = new Timeline();
 
   const pad = scene.complex.padCentre;
@@ -182,8 +190,9 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
     });
   }, true);
 
-  // ---- 21s: systems come alive ----
+  // ---- 21s: systems come alive and the terminal count begins ----
   tl.at(21, () => {
+    startCountdown();
     slate('SYSTEMS ARMED', 'TERMINAL COUNT');
     audio.commsChirp();
     say({ speaker: 'CONTROL', text: 'Terminal count. All stations go for launch.', duration: 3 });
@@ -199,12 +208,14 @@ export function createFirstLaunchCinematic(ctx: CinematicContext): Timeline {
   // ---- 24s: cut low and tight on the engines ----
   tl.at(24, () => {
     director.play(
+      // Close, but outside the volume the pad cloud fills — a camera buried in
+      // the exhaust sees nothing but white.
       lowAngleShot(vehicleBase, {
-        distance: 16,
-        height: 1.4,
+        distance: 44,
+        height: 2.6,
         azimuth: 2.3,
-        fov: 40,
-        lookHeight: 6,
+        fov: 30,
+        lookHeight: 9,
         blend: 0.35,
       }),
     );
@@ -403,6 +414,33 @@ export function attachAscentCoverage(ctx: CinematicContext): CoverageHandle {
         slate('MARS INJECTION BURN', '');
         break;
 
+      case 'cruise-begin': {
+        // The cruise is a map view spanning two planetary orbits, so the camera
+        // has to pull back by eight orders of magnitude and the clip range has
+        // to follow it.
+        const AU = 1.496e11 * SPACE_VIEW_SCALE;
+        director.setClipRange(500, AU * 24);
+        director.play({
+          kind: 'orbital',
+          target: () => new THREE.Vector3(0, 0, 0),
+          fov: 44,
+          blend: 3,
+          stiffness: 0.9,
+          handheld: 0.05,
+          position: (t: number) => {
+            // A very slow drift around the system, so the map is never static.
+            const a = 0.7 + t * 0.012;
+            return new THREE.Vector3(
+              Math.sin(a) * AU * 1.7,
+              AU * 1.15,
+              Math.cos(a) * AU * 1.7,
+            );
+          },
+        });
+        slate('TRANS-MARS INJECTION', 'CRUISE · 258 DAYS');
+        break;
+      }
+
       default:
         break;
     }
@@ -474,6 +512,8 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
       case 'mars-approach':
         setCinematicMode(true);
         audio.setAmbience('mars');
+        // Back to metre scale for the arrival.
+        director.setClipRange(0.4, 4_000_000);
         slate('MARS ARRIVAL', 'ENTRY INTERFACE IN 00:40');
         // Wide shot with the planet filling frame behind the vehicle (spec §33).
         director.play(

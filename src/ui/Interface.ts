@@ -100,6 +100,10 @@ export class Interface {
   private slateEl!: HTMLElement;
   private fadeEl!: HTMLElement;
 
+  private warpButtons!: HTMLElement;
+  /** Which warp set is currently rendered, so buttons are only rebuilt on change. */
+  private warpSetKey = '';
+
   private activeCategory: PartCategory = PartCategory.PROPULSION;
   private selectedStage = 0;
   private subtitleTimer = 0;
@@ -336,12 +340,11 @@ export class Interface {
     this.timeControls = el('div', 'osa-panel hud-hideable');
     this.timeControls.id = 'time-controls';
     this.timeControls.appendChild(el('span', 'warp-label', 'WARP'));
-    for (const scale of TIME_SCALES) {
-      const btn = el('button', 'osa-btn', `${scale}×`);
-      btn.dataset.scale = String(scale);
-      btn.addEventListener('click', () => this.handlers.onSetTimeScale(scale));
-      this.timeControls.appendChild(btn);
-    }
+    this.warpButtons = el('span');
+    this.warpButtons.style.display = 'contents';
+    this.timeControls.appendChild(this.warpButtons);
+    this.renderWarpButtons(TIME_SCALES);
+
     const pause = el('button', 'osa-btn', '❚❚');
     pause.id = 'pause-btn';
     pause.addEventListener('click', () => this.handlers.onTogglePause());
@@ -743,8 +746,14 @@ export class Interface {
     }
   }
 
-  updateTimeControls(scale: number, paused: boolean, muted: boolean): void {
-    for (const btn of Array.from(this.timeControls.children)) {
+  updateTimeControls(
+    scale: number,
+    paused: boolean,
+    muted: boolean,
+    scales: readonly number[] = TIME_SCALES,
+  ): void {
+    this.renderWarpButtons(scales);
+    for (const btn of Array.from(this.warpButtons.children)) {
       const e = btn as HTMLElement;
       if (e.dataset.scale) {
         e.classList.toggle('active', Number(e.dataset.scale) === scale);
@@ -757,6 +766,31 @@ export class Interface {
     }
     const mute = document.getElementById('mute-btn');
     if (mute) mute.textContent = muted ? '🔇' : '🔊';
+  }
+
+  /**
+   * Rebuilds the warp buttons when the available range changes. Powered flight
+   * offers up to 1000x; a cruise offers far more, because an eight-month
+   * transfer is otherwise unwatchable.
+   */
+  private renderWarpButtons(scales: readonly number[]): void {
+    const key = scales.join(',');
+    if (key === this.warpSetKey) return;
+    this.warpSetKey = key;
+
+    this.warpButtons.innerHTML = '';
+    for (const scale of scales) {
+      const label =
+        scale >= 1_000_000
+          ? `${scale / 1_000_000}M×`
+          : scale >= 1000
+            ? `${scale / 1000}k×`
+            : `${scale}×`;
+      const btn = el('button', 'osa-btn', label);
+      btn.dataset.scale = String(scale);
+      btn.addEventListener('click', () => this.handlers.onSetTimeScale(scale));
+      this.warpButtons.appendChild(btn);
+    }
   }
 
   updateDiagnostics(sim: MissionSim, visible: boolean): void {

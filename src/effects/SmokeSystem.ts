@@ -40,16 +40,16 @@ export interface GroundBlastConfig {
 
 /** Earth launch pad: hot, wet, hugely voluminous exhaust and steam. */
 export const PAD_EXHAUST: GroundBlastConfig = {
-  color: new THREE.Color(0.82, 0.8, 0.78),
-  highlight: new THREE.Color(0.96, 0.93, 0.88),
-  outflowSpeed: 46,
-  puffSize: 6,
-  growth: 9,
-  life: 8.5,
-  buoyancy: 2.6,
-  opacity: 0.52,
-  drag: 0.55,
-  rate: 130,
+  color: new THREE.Color(0.84, 0.82, 0.8),
+  highlight: new THREE.Color(0.97, 0.95, 0.9),
+  outflowSpeed: 32,
+  puffSize: 3.4,
+  growth: 5,
+  life: 6.5,
+  buoyancy: 2.2,
+  opacity: 0.3,
+  drag: 0.7,
+  rate: 80,
 };
 
 /** Mars surface: thin, fine, ochre dust thrown far and settling slowly. */

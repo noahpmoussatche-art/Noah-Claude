@@ -9,7 +9,7 @@
  * This class is what strings that chain together.
  */
 import * as THREE from 'three';
-import { TIME_SCALES } from '../data/constants';
+import { CRUISE_TIME_SCALES, MissionState, TIME_SCALES } from '../data/constants';
 import { Renderer } from './Renderer';
 import { Interface } from '../ui/Interface';
 import { Tutorial, type TutorialContext } from '../ui/Tutorial';
@@ -376,6 +376,11 @@ export class Game {
       slate: (title, sub) => this.ui.slate(title, sub),
       fade: (to, secs) => this.ui.fade(to, secs),
       setCinematicMode: (on) => this.ui.setCinematicMode(on),
+      // `force` because the player may deliberately fly a vehicle that failed
+      // its checks — the spec wants that to be possible and instructive.
+      startCountdown: () => {
+        this.sim?.beginCountdown(true);
+      },
     };
 
     this.ascentCoverage = attachAscentCoverage(ctx);
@@ -391,13 +396,6 @@ export class Game {
     });
     this.cinematic.start();
 
-    // The countdown starts a little after the cinematic so that T-0 lands on
-    // the ignition beat. The simulation runs the whole time.
-    window.setTimeout(() => {
-      // `force` because the player may deliberately fly a vehicle that failed
-      // its checks — the spec wants that to be possible and instructive.
-      this.sim?.beginCountdown(true);
-    }, 17_000);
   }
 
   private wireMissionAudio(): void {
@@ -472,7 +470,23 @@ export class Game {
     this.ui.updateTelemetry(sim, sim.telemetry);
     this.ui.updateMissionState(sim);
     this.ui.updateDiagnostics(sim, this.diagnosticsOn);
-    this.ui.updateTimeControls(sim.timeScale, sim.paused, this.audio.isMuted);
+    this.ui.updateTimeControls(
+      sim.timeScale,
+      sim.paused,
+      this.audio.isMuted,
+      this.availableTimeScales(),
+    );
+  }
+
+  /**
+   * Warp range for the current phase. A cruise gets a much larger range than
+   * powered flight, because it is measured in months rather than minutes.
+   */
+  private availableTimeScales(): readonly number[] {
+    const s = this.sim?.state;
+    return s === MissionState.TRANSFER || s === MissionState.ORBIT
+      ? CRUISE_TIME_SCALES
+      : TIME_SCALES;
   }
 
   // -------------------------------------------------------------------------
@@ -483,20 +497,35 @@ export class Game {
     if (!this.sim) return;
     this.audio.click();
     this.sim.timeScale = scale;
-    this.ui.updateTimeControls(scale, this.sim.paused, this.audio.isMuted);
+    this.ui.updateTimeControls(
+      scale,
+      this.sim.paused,
+      this.audio.isMuted,
+      this.availableTimeScales(),
+    );
   }
 
   private togglePause(): void {
     if (!this.sim) return;
     this.audio.click();
     this.sim.paused = !this.sim.paused;
-    this.ui.updateTimeControls(this.sim.timeScale, this.sim.paused, this.audio.isMuted);
+    this.ui.updateTimeControls(
+      this.sim.timeScale,
+      this.sim.paused,
+      this.audio.isMuted,
+      this.availableTimeScales(),
+    );
   }
 
   private toggleMute(): void {
     this.audio.setMuted(!this.audio.isMuted);
     if (this.sim) {
-      this.ui.updateTimeControls(this.sim.timeScale, this.sim.paused, this.audio.isMuted);
+      this.ui.updateTimeControls(
+        this.sim.timeScale,
+        this.sim.paused,
+        this.audio.isMuted,
+        this.availableTimeScales(),
+      );
     }
   }
 
@@ -664,16 +693,17 @@ export class Game {
           else if (this.ui.isSystemCheckOpen) this.ui.hideSystemCheck();
           break;
         case 'BracketRight': {
-          // Step time warp up.
           if (!this.sim) break;
-          const i = TIME_SCALES.indexOf(this.sim.timeScale as (typeof TIME_SCALES)[number]);
-          this.setTimeScale(TIME_SCALES[Math.min(i + 1, TIME_SCALES.length - 1)]);
+          const set = this.availableTimeScales();
+          const i = set.indexOf(this.sim.timeScale);
+          this.setTimeScale(set[Math.min(Math.max(i, 0) + 1, set.length - 1)]);
           break;
         }
         case 'BracketLeft': {
           if (!this.sim) break;
-          const i = TIME_SCALES.indexOf(this.sim.timeScale as (typeof TIME_SCALES)[number]);
-          this.setTimeScale(TIME_SCALES[Math.max(i - 1, 0)]);
+          const set = this.availableTimeScales();
+          const i = set.indexOf(this.sim.timeScale);
+          this.setTimeScale(set[Math.max(Math.max(i, 0) - 1, 0)]);
           break;
         }
         default:

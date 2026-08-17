@@ -52,7 +52,7 @@ export const PIONEER_LAUNCHER: VehicleDesign = {
     { partId: 'interstage-37', stage: 0 },
     { partId: 'decoupler-37', stage: 0 },
     { partId: 'eng-vulcan-vac', stage: 1 },
-    { partId: 'tank-37-s', stage: 1 },
+    { partId: 'tank-37-md', stage: 1 },
     {
       partId: 'avionics-37',
       stage: 1,
@@ -152,7 +152,7 @@ export const SURVEYOR_STACK: VehicleDesign = {
     { partId: 'decoupler-37', stage: 0 },
 
     { partId: 'eng-vulcan-vac', stage: 1 },
-    { partId: 'tank-37-s', stage: 1 },
+    { partId: 'tank-37-md', stage: 1 },
     {
       partId: 'avionics-37',
       stage: 1,

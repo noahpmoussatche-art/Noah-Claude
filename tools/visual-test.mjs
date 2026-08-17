@@ -179,7 +179,7 @@ async function main() {
   await page.waitForTimeout(8000);
   await shot('ascent-high', 'High altitude — sky darkening toward space');
 
-  await setWarp('10×');
+  await setWarp('50×');
   console.log('  waiting for ORBIT…');
   console.log('  phase:', await waitForPhase(['ORBIT'], 240_000));
   await shot('orbit', 'Orbit achieved');
@@ -188,7 +188,7 @@ async function main() {
   await shot('orbit-payload', 'On station');
 
   // ---- Interplanetary cruise ----
-  await setWarp('1000×');
+  await setWarp('1M×');
   console.log('  waiting for TRANSFER…');
   console.log('  phase:', await waitForPhase(['TRANSFER'], 180_000));
   await page.waitForTimeout(4000);
