@@ -78,6 +78,19 @@ export class MissionScene {
   private readonly _v = new THREE.Vector3();
   private readonly _q = new THREE.Quaternion();
 
+  /**
+   * Horizontal origin of the Martian render frame.
+   *
+   * Entry carries the vehicle hundreds of kilometres downrange — far outside
+   * any terrain patch that could reasonably be generated. So during entry the
+   * frame follows the vehicle (nothing but sky and plasma is in shot anyway),
+   * and it locks the moment the parachute opens, which is when the ground first
+   * matters. From then on the last few kilometres of descent play out over real
+   * terrain.
+   */
+  private marsOrigin = new THREE.Vector3();
+  private marsOriginLocked = false;
+
   private cameraPosition = new THREE.Vector3();
   private supersonicFired = false;
 
@@ -556,12 +569,22 @@ export class MissionScene {
 
     // ---- Vehicle transform ----
     flight.renderPosition(this._v);
+
+    // Lock the render frame once the parachute is out; until then keep the
+    // vehicle over the middle of the terrain patch.
+    if (!this.marsOriginLocked) {
+      this.marsOrigin.set(this._v.x, 0, this._v.z);
+      if (sim.deployment.chute > 0.05) this.marsOriginLocked = true;
+    }
+    const localX = this._v.x - this.marsOrigin.x;
+    const localZ = this._v.z - this.marsOrigin.z;
+
     // The flight simulator measures altitude from the planet datum, but the
     // rendered terrain has relief on top of it. Lifting the vehicle by the
     // local ground height keeps "altitude zero" meaning "resting on the
     // surface" — otherwise the lander touches down buried inside a hillside.
-    const groundY = mars.heightAt(this._v.x, this._v.z);
-    this.sim.vehicle.root.position.set(this._v.x, this._v.y + groundY, this._v.z);
+    const groundY = mars.heightAt(localX, localZ);
+    this.sim.vehicle.root.position.set(localX, this._v.y + groundY, localZ);
     this.sim.vehicle.root.quaternion.copy(flight.state.orientation);
 
     if (sim.shake > 0.001) {

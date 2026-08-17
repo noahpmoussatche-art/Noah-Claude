@@ -36,8 +36,11 @@ interface Crater {
   depth: number;
 }
 
-const TERRAIN_SIZE = 4_000;
-const TERRAIN_SEGMENTS = 300;
+// Large enough to contain the whole final descent: from parachute deploy at
+// ~11 km the vehicle still travels several kilometres downrange before it
+// touches down.
+const TERRAIN_SIZE = 9_000;
+const TERRAIN_SEGMENTS = 320;
 
 export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   const root = new THREE.Group();
@@ -160,7 +163,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   const distant: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 90; i++) {
     const a = (i / 90) * Math.PI * 2 + rng.range(-0.02, 0.02);
-    const d = rng.range(2_300, 3_600);
+    const d = rng.range(TERRAIN_SIZE * 0.56, TERRAIN_SIZE * 0.82);
     const w = rng.range(180, 620);
     const h = rng.range(90, 340);
 
@@ -212,7 +215,7 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
   // Ground haze: a broad translucent shell that thickens toward the horizon and
   // gives the scene aerial perspective.
   const haze = mesh(
-    new THREE.CylinderGeometry(3_900, 3_900, 620, 48, 1, true),
+    new THREE.CylinderGeometry(TERRAIN_SIZE * 0.95, TERRAIN_SIZE * 0.95, 900, 48, 1, true),
     new THREE.MeshBasicMaterial({
       color: 0xc98a5c,
       transparent: true,
@@ -316,7 +319,7 @@ function buildRockField(
   const scale = new THREE.Vector3();
   const pos = new THREE.Vector3();
 
-  const radius = size === 'large' ? 900 : 420;
+  const radius = size === 'large' ? TERRAIN_SIZE * 0.4 : TERRAIN_SIZE * 0.16;
   const [minS, maxS] = size === 'large' ? [1.6, 6.5] : [0.14, 0.9];
 
   for (let i = 0; i < count; i++) {
