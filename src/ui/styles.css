@@ -212,6 +212,20 @@ body.cinematic .hud-hideable {
   opacity: 0;
   transition: opacity 0.32s ease;
   pointer-events: none;
+  /*
+   * Dialogue has to stay readable over whatever the shot happens to be — a
+   * dawn-lit concrete deck is very nearly the same value as the type, and a
+   * drop shadow alone vanished into it. A soft scrim behind the block carries
+   * the contrast without putting a caption box on screen, which §27 rules out.
+   */
+  padding: 10px 22px;
+  border-radius: 3px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(3, 6, 10, 0.62) 0%,
+    rgba(3, 6, 10, 0.42) 55%,
+    rgba(3, 6, 10, 0) 100%
+  );
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
 }
 

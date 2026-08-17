@@ -189,7 +189,10 @@ export class MissionScene {
       const isVacuum = spec.expansion > 60;
       const plume = new EnginePlume({
         exitRadius: engine.exitRadius,
-        length: engine.exitRadius * (isVacuum ? 26 : 15),
+        // A sea-level jet is short and collimated, but not *this* short: at
+        // fifteen exit radii a first-stage flame was under a fifth of the
+        // vehicle's diameter and read as a spark rather than as thrust.
+        length: engine.exitRadius * (isVacuum ? 30 : 22),
         // Short rated burn times belong to solids, whose exhaust is far smokier.
         fuel: spec.ratedBurnTime < 120 ? 'solid' : 'kerolox',
       });
@@ -603,10 +606,22 @@ export class MissionScene {
     this.padBlast.update(dt);
 
     // Rising smoke column left behind on the way up.
+    //
+    // Emitted below the end of the flame, not at the vehicle's base. Seeding it
+    // at the base put the column *inside* the plume: the engines were firing
+    // into the middle of their own smoke, and the flame — the thing the whole
+    // liftoff is meant to show — was a bright patch inside a white cloud rather
+    // than a jet coming out of a nozzle. Exhaust only becomes opaque smoke once
+    // it has cooled and slowed, which is downstream of the luminous part.
     if (throttle > 0.05 && altitude < 9_000 && rho > 0.05) {
+      const seed = this.vehicleBase(new THREE.Vector3());
+      const down = this._v
+        .set(0, -1, 0)
+        .applyQuaternion(this.sim.vehicle.root.getWorldQuaternion(this._q));
+      seed.addScaledVector(down, this.plumeReach() * 1.15);
       this.smokeColumn.emit(
         dt,
-        this.vehicleBase(new THREE.Vector3()),
+        seed,
         throttle * clamp(1 - altitude / 9_000, 0, 1),
         this.sim.vehicle.maxDiameter * 1.4,
       );
@@ -877,6 +892,20 @@ export class MissionScene {
       if (e.operational) t = Math.max(t, e.throttle);
     }
     return t;
+  }
+
+  /**
+   * How far the longest live flame currently extends past its nozzle, metres.
+   * Used to keep the exhaust smoke downstream of the luminous jet.
+   */
+  plumeReach(): number {
+    let reach = 0;
+    for (let i = 0; i < this.plumes.length; i++) {
+      const p = this.plumes[i];
+      if (p.intensity <= 0.03) continue;
+      reach = Math.max(reach, p.reach);
+    }
+    return reach;
   }
 
   /** Smoothed plume intensity, for audio and camera reactions. */

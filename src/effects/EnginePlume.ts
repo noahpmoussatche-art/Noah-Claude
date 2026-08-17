@@ -313,6 +313,17 @@ export class EnginePlume {
     return this.smoothThrottle;
   }
 
+  /**
+   * How far the flame currently extends past the nozzle exit, metres. Mirrors
+   * the length scaling the vertex shader applies, so callers that need to stay
+   * clear of the luminous jet — the exhaust smoke, mainly — agree with what is
+   * actually on screen.
+   */
+  get reach(): number {
+    const t = this.smoothThrottle;
+    return this.options.length * lerp(0.25, 1, t) * (1 + this.vacuum * 0.5);
+  }
+
   setLightEnabled(enabled: boolean): void {
     this.light.visible = enabled;
   }

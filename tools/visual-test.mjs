@@ -242,7 +242,7 @@ async function main() {
   await shot('mars-approach', 'Mars arrival');
 
   await page.waitForTimeout(4000);
-  await shot('entry', 'Atmospheric entry — plasma');
+  await shot('entry', 'Entry interface — first contact with the atmosphere');
 
   // Entry, descent and landing are photographed by altitude, not by phase name.
   // The phases here are short and this browser polls slowly, so waiting on the
@@ -271,6 +271,15 @@ async function main() {
   // Warp through the long ballistic part of entry, then back to real time for
   // everything that is meant to be watched.
   await setWarp('5×');
+
+  // Peak heating, photographed by altitude. Entry *interface* is where the
+  // atmosphere starts, not where it bites: at 107 km the heat flux is still
+  // essentially zero, so a shot taken on the phase change catches a vehicle in
+  // clear air and proves nothing about whether the plasma renders at all. The
+  // shell lights up in the thirty-to-fifty kilometre band.
+  console.log('  peak heating band:', await waitForAltitudeBelow(42_000, 420_000));
+  await shot('entry-plasma', 'Peak heating — plasma sheath around the aeroshell');
+
   console.log('  descending…', await waitForAltitudeBelow(20_000, 420_000));
   await setWarp('1×');
 
