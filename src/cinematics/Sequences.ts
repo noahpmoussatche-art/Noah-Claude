@@ -600,7 +600,10 @@ export function attachMarsCoverage(ctx: CinematicContext): () => void {
         // sit above the vehicle looking down, so Mars is underneath it rather
         // than off-camera — the shot has to say "descending toward a planet".
         director.play(
-          trackingShot(vehicleMid, new THREE.Vector3(36, 30, 44), {
+          // Far enough back to hold the canopy as well as the lander: the dome
+          // rides a full riser length — some sixteen metres — above the vehicle,
+          // so a shot framed on the vehicle alone cuts the parachute off.
+          trackingShot(vehicleMid, new THREE.Vector3(48, 40, 58), {
             fov: 46,
             blend: 0.5,
             stiffness: 2.6,

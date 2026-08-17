@@ -125,10 +125,22 @@ export function buildParachute(canopyRadius: number, packRadius: number): THREE.
   root.add(lid);
 
   // ---- Canopy, hidden until deployment ----
+  //
+  // Two nested groups. The outer one is what the deployment animation scales,
+  // and it sits at the mortar mouth; the inner one lifts the dome a full riser
+  // length above it, so the suspension lines converge *down* onto the can. That
+  // nesting is what makes a reefed chute read correctly: at a fifth of scale the
+  // canopy is both smaller and closer, exactly as a real one is before it opens.
+  // Built the other way round — dome at the can, lines hanging below it — the
+  // canopy sits inside the vehicle it is supposed to be holding up.
   const canopy = new THREE.Group();
   canopy.name = CHUTE_CANOPY;
   canopy.scale.setScalar(0.001);
   canopy.visible = false;
+
+  const inner = new THREE.Group();
+  inner.position.y = canopyRadius * 1.5;
+  canopy.add(inner);
 
   // Hemispherical canopy with a vent at the apex and gore seams.
   const canopyGeo = new THREE.SphereGeometry(
@@ -141,7 +153,7 @@ export function buildParachute(canopyRadius: number, packRadius: number): THREE.
     Math.PI * 0.46,
   );
   const canopyMesh = mesh(canopyGeo, Materials.fabric(), true, false);
-  canopy.add(canopyMesh);
+  inner.add(canopyMesh);
 
   // Alternating high-visibility gores so the canopy is legible against sky.
   const gores: THREE.BufferGeometry[] = [];
@@ -159,7 +171,7 @@ export function buildParachute(canopyRadius: number, packRadius: number): THREE.
     );
     gores.push(g);
   }
-  canopy.add(mesh(mergeGeometries(gores), Materials.fabricOrange(), true, false));
+  inner.add(mesh(mergeGeometries(gores), Materials.fabricOrange(), true, false));
 
   // Suspension lines converging on the riser.
   const lines: THREE.BufferGeometry[] = [];
@@ -183,7 +195,7 @@ export function buildParachute(canopyRadius: number, packRadius: number): THREE.
     g.translate(top.x, top.y, top.z);
     lines.push(g);
   }
-  canopy.add(mesh(mergeGeometries(lines), Materials.fabric(), false, false));
+  inner.add(mesh(mergeGeometries(lines), Materials.fabric(), false, false));
 
   canopy.position.y = packRadius * 2;
   root.add(canopy);
