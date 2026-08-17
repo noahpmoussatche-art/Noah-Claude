@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { Materials } from '../render/materials';
-import { mergeGeometries, mesh, trussTower } from '../render/geometry';
+import { braceBetween, mergeGeometries, mesh, trussTower } from '../render/geometry';
 import { Rng } from '../utils/math';
 import { PART_CATALOG } from '../data/catalog';
 import { PartCategory } from '../parts/PartDef';
@@ -175,46 +175,164 @@ export function buildWorkshop(seed = 771): WorkshopRefs {
   root.add(mesh(mergeGeometries(rails), Materials.structuralSteel(), false, true));
 
   // -------------------------------------------------------------------------
-  // Work platforms surrounding the assembly point
+  // Service gantries flanking the assembly point
   // -------------------------------------------------------------------------
-  for (let level = 0; level < 6; level++) {
-    const y = 6 + level * 9;
-    const platform = new THREE.Group();
-    platform.position.y = y;
+  //
+  // These are two free-standing service towers, not a row of floating slabs.
+  // Each tower has four corner columns running floor to roof, horizontal
+  // stringers tying the columns together at every deck, diagonal bracing in the
+  // outer bay, and only then the decks themselves — which are grating with a
+  // toe board and a handrail. Everything a deck carries is transferred into a
+  // column, so nothing in the bay is unsupported: a work platform hanging in
+  // mid-air was the single most artificial thing in the room.
+  const LEVELS = 6;
+  const LEVEL_RISE = 9;
+  const FIRST_DECK = 6;
+  const TOWER_X = 16; // centre-line of each tower
+  const DECK_W = 13; // across the aisle
+  const DECK_L = 22; // along the bay
+  const TOP = FIRST_DECK + (LEVELS - 1) * LEVEL_RISE;
 
-    // Split platforms on both sides, leaving the vehicle bay clear.
-    for (const s of [-1, 1]) {
-      const deck = mesh(new THREE.BoxGeometry(13, 0.35, 22), Materials.structuralSteel());
-      deck.position.set(s * 16, 0, 0);
-      platform.add(deck);
+  const towerSteel: THREE.BufferGeometry[] = [];
+  const towerGrate: THREE.BufferGeometry[] = [];
+  const towerRail: THREE.BufferGeometry[] = [];
 
-      const rail = mesh(new THREE.BoxGeometry(13, 1.1, 0.12), Materials.agencyOrange());
-      rail.position.set(s * 16, 0.7, 11);
-      platform.add(rail);
-
-      const rail2 = rail.clone();
-      rail2.position.z = -11;
-      platform.add(rail2);
-
-      // Retractable inner section reaching toward the vehicle.
-      const reach = mesh(new THREE.BoxGeometry(6, 0.3, 10), Materials.agencyAccent());
-      reach.position.set(s * 8, 0.05, 0);
-      platform.add(reach);
-    }
-
-    root.add(platform);
-  }
-
-  // Stair towers at each end.
   for (const s of [-1, 1]) {
-    const stairs: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < 100; i++) {
-      const g = new THREE.BoxGeometry(3, 0.2, 0.7);
-      g.translate(s * 24, i * 0.55, -30 + (i % 20) * 0.75);
-      stairs.push(g);
+    const cx = s * TOWER_X;
+    const xIn = cx - (s * DECK_W) / 2; // edge facing the vehicle
+    const xOut = cx + (s * DECK_W) / 2; // edge facing the wall
+
+    // ---- Corner columns, floor to just above the top deck ----
+    const colH = TOP + 3;
+    for (const x of [xIn, xOut]) {
+      for (const z of [-DECK_L / 2, DECK_L / 2]) {
+        const g = new THREE.BoxGeometry(0.55, colH, 0.55);
+        g.translate(x, colH / 2, z);
+        towerSteel.push(g);
+      }
     }
-    root.add(mesh(mergeGeometries(stairs), Materials.structuralSteel(), false, true));
+
+    // ---- Per-level structure ----
+    for (let level = 0; level < LEVELS; level++) {
+      const y = FIRST_DECK + level * LEVEL_RISE;
+
+      // Stringers: the beams the deck actually sits on, column to column.
+      for (const z of [-DECK_L / 2, DECK_L / 2]) {
+        const g = new THREE.BoxGeometry(DECK_W, 0.5, 0.4);
+        g.translate(cx, y - 0.4, z);
+        towerSteel.push(g);
+      }
+      for (const x of [xIn, xOut]) {
+        const g = new THREE.BoxGeometry(0.4, 0.5, DECK_L);
+        g.translate(x, y - 0.4, 0);
+        towerSteel.push(g);
+      }
+      // Cross joists under the deck, visible from below.
+      for (let j = 1; j < 6; j++) {
+        const g = new THREE.BoxGeometry(DECK_W, 0.32, 0.24);
+        g.translate(cx, y - 0.35, -DECK_L / 2 + (j / 6) * DECK_L);
+        towerSteel.push(g);
+      }
+
+      // Deck grating.
+      const deck = new THREE.BoxGeometry(DECK_W, 0.14, DECK_L);
+      deck.translate(cx, y, 0);
+      towerGrate.push(deck);
+
+      // Retractable inner section reaching toward the vehicle, carried on two
+      // cantilever arms off the inner columns.
+      const reachLen = 6;
+      const reachX = xIn - s * (reachLen / 2);
+      const reach = new THREE.BoxGeometry(reachLen, 0.12, 10);
+      reach.translate(reachX, y, 0);
+      towerGrate.push(reach);
+      for (const z of [-4.6, 4.6]) {
+        const arm = new THREE.BoxGeometry(reachLen, 0.34, 0.22);
+        arm.translate(reachX, y - 0.28, z);
+        towerSteel.push(arm);
+      }
+
+      // Handrail: top rail, mid rail and stanchions around the outer three
+      // sides. The inner edge is left open — that is the working face.
+      const railRuns: Array<[number, number, number, number]> = [
+        // [x, z, length, axis] axis 0 = along Z, 1 = along X
+        [xOut, 0, DECK_L, 0],
+        [cx, -DECK_L / 2, DECK_W, 1],
+        [cx, DECK_L / 2, DECK_W, 1],
+      ];
+      for (const [rx, rz, len, axis] of railRuns) {
+        for (const h of [0.55, 1.05]) {
+          const g =
+            axis === 0
+              ? new THREE.BoxGeometry(0.07, 0.07, len)
+              : new THREE.BoxGeometry(len, 0.07, 0.07);
+          g.translate(rx, y + h, rz);
+          towerRail.push(g);
+        }
+        const posts = Math.max(3, Math.round(len / 2.2));
+        for (let p = 0; p <= posts; p++) {
+          const t = p / posts - 0.5;
+          const g = new THREE.BoxGeometry(0.07, 1.05, 0.07);
+          g.translate(
+            axis === 0 ? rx : cx + t * len,
+            y + 0.52,
+            axis === 0 ? t * len : rz,
+          );
+          towerRail.push(g);
+        }
+        // Toe board along the deck edge.
+        const toe =
+          axis === 0
+            ? new THREE.BoxGeometry(0.06, 0.22, len)
+            : new THREE.BoxGeometry(len, 0.22, 0.06);
+        toe.translate(rx, y + 0.11, rz);
+        towerRail.push(toe);
+      }
+
+      // ---- Diagonal bracing in the outer bay, between this deck and the next
+      // one down. Alternating direction, so the tower reads as braced steel.
+      if (level > 0) {
+        const yLow = y - LEVEL_RISE;
+        for (const z of [-DECK_L / 2, DECK_L / 2]) {
+          const dir = level % 2 === 0 ? 1 : -1;
+          const a = new THREE.Vector3(xIn, yLow, z);
+          const b = new THREE.Vector3(xOut, y, z);
+          if (dir < 0) {
+            a.set(xOut, yLow, z);
+            b.set(xIn, y, z);
+          }
+          towerSteel.push(braceBetween(a, b, 0.22));
+        }
+        // One brace in the plane along the bay, on the outer face.
+        const a = new THREE.Vector3(xOut, yLow, -DECK_L / 2);
+        const b = new THREE.Vector3(xOut, y, DECK_L / 2);
+        towerSteel.push(braceBetween(a, b, 0.2));
+      }
+    }
+
+    // ---- Access stair zig-zagging up the outer face of the tower ----
+    for (let level = 0; level < LEVELS; level++) {
+      const yBase = level === 0 ? 0 : FIRST_DECK + (level - 1) * LEVEL_RISE;
+      const rise = level === 0 ? FIRST_DECK : LEVEL_RISE;
+      const steps = Math.round(rise / 0.42);
+      const dir = level % 2 === 0 ? 1 : -1;
+      const stairX = xOut + s * 1.7;
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const g = new THREE.BoxGeometry(2.6, 0.1, 0.42);
+        g.translate(stairX, yBase + 0.3 + t * rise, dir * (t - 0.5) * (DECK_L * 0.8));
+        towerGrate.push(g);
+      }
+      // Stair stringer.
+      const a = new THREE.Vector3(stairX, yBase + 0.1, -dir * DECK_L * 0.4);
+      const b = new THREE.Vector3(stairX, yBase + rise, dir * DECK_L * 0.4);
+      towerSteel.push(braceBetween(a, b, 0.24));
+    }
   }
+
+  root.add(mesh(mergeGeometries(towerSteel), Materials.structuralSteel(), true, true));
+  root.add(mesh(mergeGeometries(towerGrate), Materials.deckGrating(), true, true));
+  root.add(mesh(mergeGeometries(towerRail), Materials.agencyOrange(), false, true));
 
   // -------------------------------------------------------------------------
   // Robotic arms on floor rails

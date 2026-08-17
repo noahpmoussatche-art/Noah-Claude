@@ -94,6 +94,12 @@ export function buildMarsSurface(seed = 91_193): MarsTerrainRefs {
    * rate and would only alias into noise.
    */
   const coarseHeightAt = (x: number, z: number): number =>
+    // Regional relief: highland massifs and basins tens of kilometres across.
+    // Without a term at this wavelength the far field is smooth at every scale
+    // the mesh can actually resolve, and the planet photographs from a hundred
+    // kilometres up as a featureless brown gradient rather than as terrain.
+    noise.fbm(x * 0.000031, z * 0.000031, 4) * 1_450 +
+    noise.ridged(x * 0.000075, z * 0.000075, 4) * 620 +
     noise.fbm(x * 0.00042, z * 0.00042, 4) * 130 +
     noise.ridged(x * 0.0016, z * 0.0016, 5) * 34;
 
@@ -386,8 +392,15 @@ function buildFarField(
       const h = coarse + (heightAt(x, z) - coarse) * detailWeight;
       positions.push(x, h, z);
 
+      // Regional albedo. Mars is not one colour: dark basaltic plains sit
+      // against bright dust-mantled highlands, and it is that banding — at tens
+      // of kilometres, not hundreds of metres — that reads as a planet from
+      // orbit. Contrast is stretched about the midpoint so the regions actually
+      // separate instead of averaging back to a single brown.
+      const regional = detail.fbm(x * 0.000042, z * 0.000042, 4) * 0.5 + 0.5;
+      const banded = clamp((regional - 0.5) * 1.85 + 0.5, 0, 1);
       const patch = detail.fbm(x * 0.0009, z * 0.0009, 3) * 0.5 + 0.5;
-      c.copy(lowColor).lerp(midColor, patch);
+      c.copy(lowColor).lerp(midColor, clamp(banded * 0.78 + patch * 0.22, 0, 1));
       // Everything far away sits behind more atmosphere, so it desaturates
       // toward the haze rather than staying vivid to the horizon.
       c.lerp(darkColor, clamp((radius - inner) / (outer * 0.7), 0, 0.35));

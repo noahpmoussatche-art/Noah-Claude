@@ -59,6 +59,29 @@ export const Materials = {
         metalness: 0.78,
       })),
 
+  /**
+   * Painted pipework for ground support equipment — deluge headers, propellant
+   * lines, service mains. A muted industrial green-grey rather than a livery
+   * colour: pad plumbing should recede into the structure, not read as signage.
+   */
+  groundPipework: (): THREE.MeshStandardMaterial =>
+    reg('groundPipework', () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x53605c,
+        roughness: 0.66,
+        metalness: 0.55,
+      })),
+
+  /** Walkable bar grating for service-tower and gantry decks. */
+  deckGrating: (): THREE.MeshStandardMaterial =>
+    reg('deckGrating', () =>
+      new THREE.MeshStandardMaterial({
+        map: tex.barGrating(4),
+        color: 0xffffff,
+        roughness: 0.72,
+        metalness: 0.7,
+      })),
+
   /** Hot-section alloy for nozzles and combustion chambers. */
   nozzleAlloy: (): THREE.MeshStandardMaterial =>
     reg('nozzleAlloy', () =>

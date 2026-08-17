@@ -40,16 +40,25 @@ export interface GroundBlastConfig {
 
 /** Earth launch pad: hot, wet, hugely voluminous exhaust and steam. */
 export const PAD_EXHAUST: GroundBlastConfig = {
-  color: new THREE.Color(0.84, 0.82, 0.8),
-  highlight: new THREE.Color(0.97, 0.95, 0.9),
-  outflowSpeed: 28,
-  puffSize: 3,
-  growth: 4,
-  life: 5.5,
-  buoyancy: 1.4,
-  opacity: 0.22,
-  drag: 0.85,
-  rate: 70,
+  // Steam-and-exhaust white, but not a flat one: the shaded side of a real pad
+  // cloud is a good deal darker than its sunlit crown, and it is that internal
+  // contrast that makes it read as a billowing volume rather than as fog.
+  color: new THREE.Color(0.55, 0.55, 0.56),
+  highlight: new THREE.Color(0.96, 0.94, 0.9),
+  outflowSpeed: 30,
+  // Many small puffs rather than a few enormous ones. Each puff used to grow to
+  // roughly a twenty-five metre radius over its life, and a few hundred of those
+  // overlapping turned the bottom half of every liftoff frame into a featureless
+  // white wall that hid the pad, the flame and the vehicle alike.
+  puffSize: 2.4,
+  growth: 1.8,
+  life: 4.4,
+  // Low enough that the cloud rolls outward across the deck instead of climbing
+  // the vehicle and swallowing the shot.
+  buoyancy: 0.85,
+  opacity: 0.15,
+  drag: 0.9,
+  rate: 110,
 };
 
 /** Mars surface: thin, fine, ochre dust thrown far and settling slowly. */

@@ -21,7 +21,17 @@ import { ParticleSystem, effectRng } from './ParticleSystem';
 
 const PLUME_VERTEX = /* glsl */ `
   varying vec2 vUv;
-  varying float vRadial;
+  /**
+   * How squarely this fragment's surface faces the camera: 1 down the middle of
+   * the jet, 0 at the silhouette.
+   *
+   * The plume is a cylindrical shell, so *every* vertex sits on the surface and
+   * there is no radial coordinate across the cross-section to fade with. What
+   * makes a shell read as a solid glowing volume is the length of the view ray's
+   * chord through it, which is longest looking straight down the axis of the
+   * tube and shortest at the grazing edge — and that is what this approximates.
+   */
+  varying float vFacing;
 
   uniform float uTime;
   uniform float uThrottle;
@@ -70,15 +80,20 @@ const PLUME_VERTEX = /* glsl */ `
     pos.y *= mix(0.25, 1.0, uThrottle);
     pos.xz *= mix(0.55, 1.0, uThrottle);
 
-    vRadial = length(pos.xz) / max(length(position.xz), 0.0001);
+    // The cylinder's normal is radial, and stays very nearly so through the
+    // deformation above, so it can be reused rather than recomputed.
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    vec3 n = normalize(normalMatrix * normal);
+    vec3 viewDir = normalize(-mv.xyz);
+    vFacing = abs(dot(n, viewDir));
 
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
   }
 `;
 
 const PLUME_FRAGMENT = /* glsl */ `
   varying vec2 vUv;
-  varying float vRadial;
+  varying float vFacing;
 
   uniform float uTime;
   uniform float uThrottle;
@@ -104,18 +119,25 @@ const PLUME_FRAGMENT = /* glsl */ `
     float diamondStrength = (1.0 - uVacuum) * (1.0 - smoothstep(0.05, 0.62, d)) * uThrottle;
     color += vec3(0.85, 0.92, 1.0) * diamonds * diamondStrength * 1.5;
 
-    // ---- Radial falloff ----
-    // Hot dense centre, soft luminous edge.
-    float radial = clamp(vRadial, 0.0, 2.0);
-    float edge = 1.0 - smoothstep(0.35, 1.0, radial);
-    float centre = 1.0 - smoothstep(0.0, 0.55, radial);
-    color += uCoreColor * centre * 0.55 * (1.0 - d);
+    // ---- Volume falloff ----
+    // Approximate the chord the view ray cuts through the jet: longest looking
+    // down the middle of the tube, shortest at the grazing silhouette. That is
+    // what turns an open cylinder into something that reads as a dense core
+    // wrapped in a softer luminous sheath.
+    float facing = clamp(vFacing, 0.0, 1.0);
+    float thickness = pow(facing, 1.3);
+    // A rim term so the jet has a glowing boundary rather than dropping to
+    // nothing the instant the surface turns away.
+    float rim = pow(1.0 - facing, 2.5);
+    float body = thickness + rim * 0.3;
+
+    color += uCoreColor * thickness * 0.6 * (1.0 - d);
 
     // ---- Alpha ----
     // Dense at the nozzle, dissolving downstream; flicker keeps it alive.
     float flicker = 0.88 + 0.12 * sin(uTime * 41.0 + d * 9.0)
                          + 0.06 * sin(uTime * 97.0);
-    float alpha = (1.0 - pow(d, 0.85)) * edge * uIntensity * flicker;
+    float alpha = (1.0 - pow(d, 0.85)) * body * uIntensity * flicker;
     alpha *= smoothstep(0.0, 0.06, uThrottle);
 
     if (alpha <= 0.002) discard;

@@ -144,15 +144,50 @@ export function buildLaunchComplex(seed = 4242): LaunchComplexRefs {
   }
   padGroup.add(mesh(mergeGeometries(holdDowns), Materials.structuralSteel()));
 
-  // Water deluge headers around the mount.
+  // ---- Water deluge system ----
+  //
+  // A sound-suppression deluge is a ring header lying on the deck with short
+  // spray nozzles rising off it — not a picket fence. The previous version drew
+  // twenty 2.6 m posts in bright agency blue standing around the mount, which
+  // dominated every low shot of the pad and read as pure placeholder geometry.
   const deluge: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * Math.PI * 2;
-    const g = new THREE.CylinderGeometry(0.28, 0.28, 2.6, 6);
-    g.translate(Math.sin(a) * 11.5, PAD_HEIGHT + 1.3, Math.cos(a) * 11.5);
+
+  // The header itself: a large-bore pipe running the full circle at deck level.
+  const header = new THREE.TorusGeometry(11.5, 0.34, 8, 40);
+  header.rotateX(Math.PI / 2);
+  header.translate(0, PAD_HEIGHT + 0.42, 0);
+  deluge.push(header);
+
+  // Risers from the deck up to the header, carrying it clear of the surface.
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    const g = new THREE.BoxGeometry(0.4, 0.5, 0.4);
+    g.translate(Math.sin(a) * 11.5, PAD_HEIGHT + 0.2, Math.cos(a) * 11.5);
     deluge.push(g);
   }
-  padGroup.add(mesh(mergeGeometries(deluge), Materials.agencyAccent()));
+
+  // Spray nozzles: short stubs angled inward toward the flame trench, standing
+  // only about half a metre proud of the header.
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const g = new THREE.CylinderGeometry(0.075, 0.13, 0.62, 6);
+    // Lean inward, toward the mount.
+    g.rotateX(0.42);
+    g.translate(0, 0.3, 0);
+    g.rotateY(-a);
+    g.translate(Math.sin(a) * 11.5, PAD_HEIGHT + 0.5, Math.cos(a) * 11.5);
+    deluge.push(g);
+  }
+
+  // Two supply mains feeding the header from the edge of the deck.
+  for (const side of [1, -1]) {
+    const g = new THREE.CylinderGeometry(0.42, 0.42, PAD_RADIUS - 11, 8);
+    g.rotateZ(Math.PI / 2);
+    g.translate(side * (11.5 + (PAD_RADIUS - 11) / 2), PAD_HEIGHT + 0.42, 0);
+    deluge.push(g);
+  }
+
+  padGroup.add(mesh(mergeGeometries(deluge), Materials.groundPipework()));
 
   // Perimeter railings on the deck edge.
   const rails: THREE.BufferGeometry[] = [];

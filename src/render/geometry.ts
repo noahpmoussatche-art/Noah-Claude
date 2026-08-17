@@ -346,6 +346,35 @@ export function greebleStrip(
   return mergeGeometries(parts);
 }
 
+/**
+ * A square-section structural member running between two points.
+ *
+ * Diagonal bracing is what makes a steel frame read as a *structure* rather
+ * than a stack of shelves, and it has to actually land on the joints it claims
+ * to tie together — so this takes the two endpoints and builds the member
+ * between them rather than approximating with a rotated box.
+ */
+export function braceBetween(
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+  thickness: number,
+): THREE.BufferGeometry {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  if (len < 1e-4) return new THREE.BoxGeometry(thickness, thickness, thickness);
+
+  const g = new THREE.BoxGeometry(thickness, len, thickness);
+  // Box is built centred on the origin along +Y; stand it up along the member.
+  g.applyQuaternion(
+    new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize(),
+    ),
+  );
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  return g;
+}
+
 /** A hemispherical pressure-vessel end used on ground storage tanks. */
 export function sphericalTank(radius: number, segments = 20): THREE.BufferGeometry {
   return new THREE.SphereGeometry(radius, segments, Math.max(8, segments / 2));

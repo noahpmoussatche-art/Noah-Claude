@@ -56,6 +56,50 @@ function grain(ctx: Ctx, size: number, amount: number, seed: number): void {
 }
 
 /**
+ * Serrated bar grating, as used for every walkable surface on a service tower.
+ *
+ * The pattern matters more than it sounds: a work platform rendered as a plain
+ * grey slab reads as a floating rectangle, whereas the open bar pattern reads
+ * as a deck you could stand on. The alpha channel is punched through between
+ * the bars so the structure below shows past it.
+ */
+export function barGrating(repeat = 1): THREE.Texture {
+  const key = `grating:${repeat}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+
+  const size = 256;
+  const { canvas, ctx } = makeCanvas(size);
+
+  // Open space between the bars.
+  ctx.fillStyle = '#2b2f34';
+  ctx.fillRect(0, 0, size, size);
+
+  // Load-bearing bars: closely spaced, running one way.
+  const pitch = size / 12;
+  for (let i = 0; i < 12; i++) {
+    const x = i * pitch;
+    ctx.fillStyle = '#878e97';
+    ctx.fillRect(x, 0, pitch * 0.42, size);
+    // Top highlight on the bar edge.
+    ctx.fillStyle = '#a9b1ba';
+    ctx.fillRect(x, 0, pitch * 0.14, size);
+  }
+
+  // Cross rods, spaced much wider than the bars.
+  for (let j = 0; j < 4; j++) {
+    const y = (j + 0.5) * (size / 4);
+    ctx.fillStyle = '#767d86';
+    ctx.fillRect(0, y, size, size * 0.035);
+  }
+
+  grain(ctx, size, 10, 21);
+  const tex = finish(canvas, repeat);
+  cache.set(key, tex);
+  return tex;
+}
+
+/**
  * Brushed / rolled metal skin with faint longitudinal streaks and weld seams.
  * Used for tank barrels and structural skins.
  */

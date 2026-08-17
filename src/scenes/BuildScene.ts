@@ -105,7 +105,11 @@ export class BuildScene {
 
   /** Point the camera should frame: the middle of the vehicle. */
   focusPoint(target = new THREE.Vector3()): THREE.Vector3 {
-    if (!this.vehicle) return target.copy(this.workshop.assemblyPoint).setY(8);
+    // With nothing on the stand, frame the empty assembly bay itself — the
+    // stand, the crew and the floor markings — rather than a point eight metres
+    // up in clear air, which pointed the camera at a blank wall and made the
+    // opening view of the workshop look like a rendering error.
+    if (!this.vehicle) return target.copy(this.workshop.assemblyPoint).setY(3.5);
     return target
       .copy(this.vehicleAnchor.position)
       .setY(this.vehicleAnchor.position.y + this.vehicle.height * 0.45);
@@ -120,7 +124,9 @@ export class BuildScene {
    * is also how it looks in a real high bay.
    */
   framingDistance(): number {
-    const h = this.vehicle?.height ?? 12;
+    // An empty bay is framed from further back than its nominal 12 m "vehicle",
+    // so the shot shows the room the player is about to build in.
+    const h = this.vehicle?.height ?? 30;
     return clamp(h * 0.85, 18, 43);
   }
 

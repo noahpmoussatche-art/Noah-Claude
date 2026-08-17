@@ -571,10 +571,26 @@ export class Game {
       .vehiclePosition(new THREE.Vector3())
       .project(this.director.camera);
 
+    // Past staging the launch vehicle's origin is not what the cameras frame —
+    // the surviving hardware is (MissionScene.vehicleCentre). Reporting only the
+    // origin made the Martian phases look like framing failures when the camera
+    // was pointed correctly, and would hide a real one. Both are reported.
+    const centre = this.missionScene.vehicleCentre(new THREE.Vector3());
+    const centreWorld = centre.clone();
+    const centreNdc = centre.project(this.director.camera);
+
     return {
       ...this.missionScene.debugSnapshot(),
       screen: [Math.round(ndc.x * 100) / 100, Math.round(ndc.y * 100) / 100],
       inFrame: Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1 && ndc.z < 1,
+      centre: centreWorld.toArray().map((v) => Math.round(v * 100) / 100),
+      centreScreen: [
+        Math.round(centreNdc.x * 100) / 100,
+        Math.round(centreNdc.y * 100) / 100,
+      ],
+      centreInFrame:
+        Math.abs(centreNdc.x) <= 1 && Math.abs(centreNdc.y) <= 1 && centreNdc.z < 1,
+      cameraToCentre: Math.round(this.director.camera.position.distanceTo(centreWorld)),
       // The harness samples the opening sequence by *its* clock rather than by
       // wall clock: a software renderer runs the game at a fraction of real
       // speed, and a fixed wall-clock delay would photograph the wrong shot.
