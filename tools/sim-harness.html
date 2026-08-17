@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ORBITAL — simulation harness</title>
+  </head>
+  <body>
+    <!--
+      A headless balance harness. It builds the reference vehicles and flies the
+      full mission profile with no rendering at all, so ascent performance,
+      staging, delta-v and the Mars entry sequence can be verified in seconds
+      instead of watching a real-time launch.
+    -->
+    <pre id="out">running…</pre>
+    <script type="module" src="./sim-harness.ts"></script>
+  </body>
+</html>

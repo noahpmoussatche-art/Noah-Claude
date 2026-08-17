@@ -1,1 +1,159 @@
-# Noah-Claude
+# ORBITAL ENGINEERING
+
+A 3D space-construction and exploration game. Build a launch vehicle from
+modular parts, check it against the physics, then watch it fly — or fail —
+exactly as you designed it.
+
+Two ducks run the agency.
+
+```
+npm install
+npm run dev
+```
+
+---
+
+## What it is
+
+You are the entire engineering staff of the **Orbital Space Agency**, along with
+Quill (methodical, carries a clipboard) and Mavis (quicker, has to ride the
+thing). You assemble vehicles from a catalogue of parts that all carry real
+mass, dimensions and physics, run a pre-flight check that tells you which
+physical limit you are about to cross, and then launch.
+
+You never pilot. Once it lights, the guidance system flies the profile and you
+control the camera, the time warp and the pause. What happens is a consequence
+of what you built.
+
+### The three missions
+
+| Mission | Profile |
+| --- | --- |
+| **FIRST FLIGHT** | Two-stage launcher to a low parking orbit. |
+| **SURVEYOR** | Carry a satellite up inside the fairing, separate it, watch it unfold its solar wings and high-gain dish. |
+| **ARES** | The full profile: orbit, trans-Mars injection, an eight-month cruise, entry at 5.5 km/s, parachute, and the last kilometre on the descent engine. |
+
+---
+
+## The simulation
+
+Everything visible is driven by an integrator, not an animation.
+
+**Translation** comes from thrust, inverse-square gravity and atmospheric drag.
+Nozzle performance interpolates between sea-level and vacuum by ambient
+pressure, which is why a vacuum bell is useless at liftoff and why a descent
+engine gets essentially its full vacuum thrust in Mars's thin air.
+
+**Rotation** comes from the aerodynamic moment about the centre of mass,
+thrust-vector control at the gimbal, and any lateral thrust offset you built in.
+The aerodynamic moment is computed as `(r_CoP − r_CoM) × F_aero` rather than
+"rotate the nose toward the velocity" — that distinction is what lets an entry
+capsule fly heat-shield-first while a rocket flies nose-first, from the same
+equation.
+
+**Mass properties** — centre of mass, centre of thrust, centre of pressure,
+pitch inertia — are computed from the actual placed parts every step, and the
+centre of mass migrates as propellant drains. The diagnostic overlay draws the
+same numbers the integrator uses.
+
+**Ascent guidance** flies a gravity turn whose pitch programme is tied to the
+target orbit, then holds a climb rate onto the target altitude while a
+horizontal burn lifts periapsis clear of the atmosphere. Throttle is limited by
+dynamic pressure through max-Q and by a 4 g acceleration cap.
+
+**Entry, descent and landing** separates the cruise stage, flies the aeroshell
+into the atmosphere, deploys the parachute around Mach 2 at ~11 km, jettisons
+the shield, cuts the canopy as the engine lights, cancels horizontal drift, and
+then descends vertically on a braking curve to a walking-pace touchdown.
+
+**Time warp** runs to 1000×, and the physics sub-steps to match. During powered
+atmospheric flight the step size is small, so the effective warp is capped
+rather than letting the integrator take strides it cannot resolve.
+
+### Failures are real
+
+A vehicle with thrust-to-weight below 1.0 sits on the pad. One short on
+propellant runs dry partway up. One that loses attitude authority at high
+dynamic pressure tumbles and breaks apart. An aeroshell that is undersized for
+the entry heat load does not survive to the parachute phase. Coming in above the
+landing gear's rated speed collapses it.
+
+Every failure reports which physical limit was exceeded and by how much.
+
+---
+
+## Rendering
+
+There are no binary art assets. Every model is procedural geometry and every
+texture is drawn to a canvas at load time.
+
+- **Parts** are assembled the way the real hardware is. An engine has a
+  combustion chamber, a regeneratively-cooled bell with stiffening hoops, a
+  turbopump, feed ducts, a gimbal block and actuators. A tank is a lathed
+  pressure vessel with elliptical bulkheads, stringers, ribs, a feed line and a
+  cable raceway. An interstage is an open triangulated truss with pneumatic
+  pushers.
+- **Scale is one unit per metre**, everywhere. A duck is 0.55 m, the reference
+  launcher is ~56 m, the launch tower is 78 m.
+- **Engine plumes** are a shaded supersonic core with shock diamonds that fade
+  out in vacuum, a turbulent luminous envelope, a bloom at the exit plane, a
+  trailing exhaust column and a flickering dynamic light. The plume geometry
+  responds to ambient pressure and throttle.
+- **Pad interaction**: exhaust hits the deflector and erupts sideways out of the
+  flame trench in a rolling cloud before the vehicle has moved.
+- **Mars** is a displaced terrain built from layered noise with carved craters,
+  raised ejecta rims, central peaks, instanced boulder fields, wind-blown dust
+  and a butterscotch sky with the blue aureole around the sun that Mars actually
+  has.
+
+---
+
+## Tools
+
+The `tools/` directory holds the verification harnesses used to build this.
+
+```bash
+node tools/run-sim-harness.mjs     # fly every reference mission headlessly
+node tools/run-failure-cases.mjs   # confirm bad vehicles fail, and how
+node tools/visual-test.mjs [dir]   # drive the real game and capture screenshots
+node tools/sweep.mjs "0.4,0.5"     # sweep the gravity-turn pitch programme
+```
+
+The simulation harness flies all three missions in seconds with no rendering,
+which is what made the ascent and landing controllers tunable by measurement
+rather than by guesswork.
+
+---
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Drag | Orbit camera |
+| Scroll | Zoom |
+| `Space` | Pause |
+| `D` | Diagnostic overlay (CoM / CoT / CoP / vectors) |
+| `M` | Mute |
+| `[` `]` | Time warp down / up |
+| `Esc` | Skip cinematic |
+
+---
+
+## Layout
+
+```
+src/
+  data/        physical constants, part catalogue, mission definitions
+  parts/       part schema and procedural model builders
+  vehicles/    design resolution, assembly, mass properties, staging
+  physics/     atmosphere, flight dynamics integrator
+  simulation/  mission state machine, pre-flight checks, transfer, telemetry
+  effects/     plumes, smoke, dust, entry plasma, particle system
+  characters/  duck models and procedural animation
+  scenes/      launch complex, workshop, mission control, mission scene
+  planets/     Mars surface, sky, planet globes, starfield
+  cinematics/  camera director, shot library, scripted sequences
+  ui/          interface, tutorial, diagnostic overlay, styling
+  audio/       synthesised audio engine
+  render/      shared materials, textures, geometry constructors
+```

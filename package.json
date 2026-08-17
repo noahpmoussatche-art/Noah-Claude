@@ -1,0 +1,22 @@
+{
+  "name": "orbital-engineering",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ORBITAL ENGINEERING 3D — a space construction and exploration simulator",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "playwright": "^1.62.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
