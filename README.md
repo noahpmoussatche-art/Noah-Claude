@@ -177,3 +177,65 @@ src/
   audio/       synthesised audio engine
   render/      shared materials, textures, geometry constructors
 ```
+
+---
+
+## Hosting it
+
+The game is entirely static — no server, no API, no database, no build-time
+secrets. Everything runs in the browser, so "deploying" means putting the
+contents of `dist/` behind any web server.
+
+Vite is configured with `base: './'`, so every asset reference is relative and
+the build works unchanged from a domain root or from a subdirectory such as
+`example.com/orbital/`. This is verified, not assumed — `tools/file-check.mjs`
+boots a built copy over a real HTTP server from a subdirectory and fails if
+anything 404s or throws.
+
+### The quickest route: drop the folder
+
+Build, then drag the `dist` folder onto [app.netlify.com/drop](https://app.netlify.com/drop).
+You get a public URL in a few seconds, with no account and no repository
+connection. Works regardless of whether this repo is private.
+
+```
+npm ci
+npm run build      # produces dist/
+```
+
+Cloudflare Pages offers the same via *Direct Upload*.
+
+### A single file, no folder
+
+`npm run bundle` inlines the script and stylesheet into one self-contained
+`.html`. That one file can be opened straight off disk, emailed, or dropped on
+any host that serves a static page.
+
+```
+npm run build && npm run bundle
+```
+
+### GitHub Pages, on every push
+
+`.github/workflows/deploy.yml` builds and publishes on every push to `main`,
+and can be run by hand from the Actions tab to publish any branch. To enable
+it: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+One caveat worth knowing before you try: **GitHub Pages only serves from a
+private repository on a paid plan.** On a free account the repository has to be
+public. If this one stays private, use Netlify, Cloudflare Pages or Vercel
+instead — their free tiers all publish from private repositories.
+
+### What a host needs to get right
+
+Nothing unusual, but two things are worth checking if a deploy misbehaves:
+
+- **`.js` must be served as `application/javascript`.** The bundle is an ES
+  module, and a host that sends `text/plain` will have the browser refuse it.
+  Every host named above does this correctly by default.
+- **WebGL must be available in the visitor's browser.** The game fails with a
+  readable message rather than a blank screen if it is not, but there is no
+  software fallback — this is a 3D game.
+
+No HTTPS-only APIs are used, so the site works over plain HTTP as well, though
+there is no reason to prefer that.
