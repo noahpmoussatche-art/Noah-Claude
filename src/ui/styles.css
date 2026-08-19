@@ -1,0 +1,1238 @@
+/**
+ * ORBITAL ENGINEERING — interface styling.
+ *
+ * The prototype's UI demanded too much attention (spec §62). This design keeps
+ * the HUD to thin, translucent edges of the frame so the 3D world is never
+ * covered, and `body.cinematic` collapses almost all of it away entirely
+ * (spec §63) leaving only letterbox bars and a subtitle line.
+ *
+ * The visual identity is the agency's own (spec §61): deep navy, instrument
+ * cyan, and a single warning amber — deliberately not anyone else's palette.
+ */
+
+:root {
+  /* Agency palette */
+  --osa-void: #05080e;
+  --osa-deep: #0a1018;
+  --osa-panel: rgba(10, 17, 26, 0.82);
+  --osa-panel-solid: #0d1622;
+  --osa-line: rgba(120, 170, 210, 0.22);
+  --osa-line-strong: rgba(140, 200, 240, 0.45);
+
+  --osa-text: #d6e4f0;
+  --osa-text-dim: #7e93a8;
+  --osa-text-bright: #f2f8ff;
+
+  --osa-accent: #35b6ea;
+  --osa-accent-dim: #1c7ba6;
+  --osa-good: #3fd08a;
+  --osa-warn: #f0a83c;
+  --osa-fail: #e8543f;
+
+  --osa-mono: 'SF Mono', 'Roboto Mono', 'Consolas', ui-monospace, monospace;
+  --osa-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--osa-void);
+  color: var(--osa-text);
+  font-family: var(--osa-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#ui-root > * {
+  pointer-events: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Shared primitives
+   -------------------------------------------------------------------------- */
+
+.osa-panel {
+  background: var(--osa-panel);
+  border: 1px solid var(--osa-line);
+  border-radius: 3px;
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.osa-label {
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--osa-text-dim);
+}
+
+.osa-value {
+  font-family: var(--osa-mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--osa-text-bright);
+}
+
+button.osa-btn {
+  font-family: var(--osa-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--osa-text);
+  background: rgba(28, 44, 62, 0.7);
+  border: 1px solid var(--osa-line);
+  border-radius: 2px;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+button.osa-btn:hover:not(:disabled) {
+  background: rgba(46, 78, 104, 0.85);
+  border-color: var(--osa-line-strong);
+  color: var(--osa-text-bright);
+}
+
+button.osa-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+button.osa-btn.primary {
+  background: linear-gradient(180deg, var(--osa-accent) 0%, var(--osa-accent-dim) 100%);
+  border-color: var(--osa-accent);
+  color: #041019;
+  font-weight: 600;
+}
+
+button.osa-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+button.osa-btn.danger {
+  border-color: var(--osa-fail);
+  color: var(--osa-fail);
+}
+
+button.osa-btn.active {
+  background: var(--osa-accent);
+  border-color: var(--osa-accent);
+  color: #041019;
+}
+
+/* --------------------------------------------------------------------------
+   Cinematic mode (spec §62, §63)
+   -------------------------------------------------------------------------- */
+
+.letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #000;
+  z-index: 60;
+  transition: height 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.letterbox.top {
+  top: 0;
+}
+
+.letterbox.bottom {
+  bottom: 0;
+}
+
+body.cinematic .letterbox {
+  height: 8.5vh;
+}
+
+/* Everything non-essential collapses during a cinematic. */
+body.cinematic .hud-hideable {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+.hud-hideable {
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  z-index: 90;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   Subtitles — text is secondary to the image (spec §27)
+   -------------------------------------------------------------------------- */
+
+#subtitle {
+  position: absolute;
+  bottom: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 46ch;
+  text-align: center;
+  z-index: 70;
+  opacity: 0;
+  transition: opacity 0.32s ease;
+  pointer-events: none;
+  /*
+   * Dialogue has to stay readable over whatever the shot happens to be — a
+   * dawn-lit concrete deck is very nearly the same value as the type, and a
+   * drop shadow alone vanished into it. A soft scrim behind the block carries
+   * the contrast without putting a caption box on screen, which §27 rules out.
+   */
+  padding: 10px 22px;
+  border-radius: 3px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(3, 6, 10, 0.62) 0%,
+    rgba(3, 6, 10, 0.42) 55%,
+    rgba(3, 6, 10, 0) 100%
+  );
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
+}
+
+#subtitle.visible {
+  opacity: 1;
+}
+
+#subtitle .speaker {
+  display: block;
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--osa-accent);
+  margin-bottom: 4px;
+}
+
+#subtitle .line {
+  font-size: 17px;
+  line-height: 1.45;
+  color: #fff;
+  font-weight: 400;
+}
+
+/* --------------------------------------------------------------------------
+   Slate — small corner titles instead of full-screen text cards
+   -------------------------------------------------------------------------- */
+
+#slate {
+  position: absolute;
+  left: 34px;
+  bottom: 13vh;
+  z-index: 70;
+  opacity: 0;
+  transform: translateX(-14px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
+}
+
+#slate.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+#slate .bar {
+  width: 2px;
+  height: 100%;
+  background: var(--osa-accent);
+  position: absolute;
+  left: -10px;
+  top: 0;
+}
+
+#slate .title {
+  font-family: var(--osa-mono);
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+
+#slate .sub {
+  font-family: var(--osa-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--osa-text-dim);
+  margin-top: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   HUD
+   -------------------------------------------------------------------------- */
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#hud > * {
+  pointer-events: auto;
+}
+
+/* Telemetry strip, top-left, deliberately thin */
+#telemetry {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  padding: 11px 15px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(96px, auto));
+  gap: 8px 22px;
+}
+
+#telemetry .row .osa-value {
+  font-size: 14px;
+}
+
+#telemetry .row .osa-value.warn {
+  color: var(--osa-warn);
+}
+
+#telemetry .row .osa-value.fail {
+  color: var(--osa-fail);
+}
+
+/* Mission state, top-centre */
+#mission-state {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  text-align: center;
+}
+
+#mission-state .phase {
+  font-family: var(--osa-mono);
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  color: var(--osa-accent);
+}
+
+#mission-state .met {
+  font-family: var(--osa-mono);
+  font-size: 11px;
+  color: var(--osa-text-dim);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Countdown, large and central but only during the count */
+#countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--osa-mono);
+  font-size: 120px;
+  font-weight: 200;
+  color: #fff;
+  text-shadow: 0 0 60px rgba(53, 182, 234, 0.7);
+  opacity: 0;
+  z-index: 65;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+#countdown.tick {
+  animation: countdown-pulse 1s ease-out;
+}
+
+@keyframes countdown-pulse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+  18% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+}
+
+/* Time controls, bottom-right */
+#time-controls {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  gap: 5px;
+  padding: 8px 10px;
+  align-items: center;
+}
+
+#time-controls .warp-label {
+  font-family: var(--osa-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--osa-text-dim);
+  margin-right: 5px;
+}
+
+#time-controls button {
+  padding: 5px 9px;
+  font-size: 9.5px;
+}
+
+/* Warnings, bottom-left */
+#warnings {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 380px;
+}
+
+.warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 12px;
+  border-left: 2px solid var(--osa-warn);
+  background: rgba(24, 16, 6, 0.82);
+  font-family: var(--osa-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  animation: warn-in 0.3s ease;
+}
+
+.warning.fail {
+  border-left-color: var(--osa-fail);
+  background: rgba(28, 10, 8, 0.85);
+}
+
+.warning .code {
+  color: var(--osa-warn);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.warning.fail .code {
+  color: var(--osa-fail);
+}
+
+.warning .msg {
+  color: var(--osa-text);
+  font-family: var(--osa-sans);
+  font-size: 11.5px;
+}
+
+@keyframes warn-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Build screen
+   -------------------------------------------------------------------------- */
+
+#build-ui {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr 316px;
+  pointer-events: none;
+}
+
+#build-ui.hidden {
+  display: none;
+}
+
+#build-ui > * {
+  pointer-events: auto;
+}
+
+/* Parts catalogue, left */
+#parts-panel {
+  margin: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#parts-panel header {
+  padding: 13px 15px 10px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+#parts-panel header .title {
+  font-family: var(--osa-mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--osa-text-bright);
+}
+
+#parts-panel header .sub {
+  font-size: 10.5px;
+  color: var(--osa-text-dim);
+  margin-top: 3px;
+}
+
+#category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+#category-tabs button {
+  padding: 4px 7px;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+}
+
+#part-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 7px;
+}
+
+.part-entry {
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.part-entry:hover {
+  background: rgba(40, 66, 90, 0.5);
+  border-color: var(--osa-line);
+}
+
+.part-entry.selected {
+  background: rgba(28, 96, 132, 0.45);
+  border-color: var(--osa-accent);
+}
+
+.part-entry .name {
+  font-size: 12.5px;
+  color: var(--osa-text-bright);
+  font-weight: 500;
+}
+
+.part-entry .spec {
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  color: var(--osa-text-dim);
+  margin-top: 3px;
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+}
+
+.part-entry .fn {
+  font-size: 10.5px;
+  color: var(--osa-accent);
+  margin-top: 4px;
+}
+
+/* Vehicle summary, right */
+#vehicle-panel {
+  margin: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#vehicle-panel header {
+  padding: 13px 15px 10px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+#stack-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 7px;
+  min-height: 90px;
+}
+
+.stack-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 2px;
+  font-size: 11.5px;
+}
+
+.stack-entry:hover {
+  background: rgba(40, 66, 90, 0.45);
+}
+
+.stack-entry .stage-chip {
+  font-family: var(--osa-mono);
+  font-size: 8.5px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: var(--osa-accent-dim);
+  color: #041019;
+  font-weight: 700;
+}
+
+.stack-entry .nm {
+  flex: 1;
+  color: var(--osa-text);
+}
+
+.stack-entry .rm {
+  color: var(--osa-fail);
+  cursor: pointer;
+  font-family: var(--osa-mono);
+  opacity: 0.6;
+  padding: 0 4px;
+}
+
+.stack-entry .rm:hover {
+  opacity: 1;
+}
+
+#vehicle-stats {
+  padding: 12px 15px;
+  border-top: 1px solid var(--osa-line);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px 14px;
+}
+
+#build-actions {
+  padding: 12px 15px;
+  border-top: 1px solid var(--osa-line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+#build-actions .row {
+  display: flex;
+  gap: 7px;
+}
+
+#build-actions .row button {
+  flex: 1;
+}
+
+/* --------------------------------------------------------------------------
+   System check (spec §53)
+   -------------------------------------------------------------------------- */
+
+#system-check {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, 88vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  z-index: 80;
+  display: none;
+}
+
+#system-check.visible {
+  display: block;
+}
+
+#system-check header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+#system-check header .title {
+  font-family: var(--osa-mono);
+  font-size: 17px;
+  letter-spacing: 0.26em;
+  color: var(--osa-text-bright);
+}
+
+#system-check header .sub {
+  font-size: 12px;
+  color: var(--osa-text-dim);
+  margin-top: 5px;
+}
+
+.check-row {
+  display: grid;
+  grid-template-columns: 132px 78px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 11px 24px;
+  border-bottom: 1px solid rgba(120, 170, 210, 0.09);
+}
+
+.check-row .sys {
+  font-family: var(--osa-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+  color: var(--osa-text);
+  padding-top: 2px;
+}
+
+.check-row .status {
+  font-family: var(--osa-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  padding-top: 2px;
+}
+
+.check-row .status.nominal {
+  color: var(--osa-good);
+}
+
+.check-row .status.caution {
+  color: var(--osa-warn);
+}
+
+.check-row .status.fail {
+  color: var(--osa-fail);
+}
+
+.check-row .body .summary {
+  font-size: 12.5px;
+  color: var(--osa-text-bright);
+}
+
+.check-row .body .detail {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--osa-text-dim);
+  margin-top: 4px;
+}
+
+#check-footer {
+  padding: 16px 24px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+#check-footer .verdict {
+  flex: 1;
+  font-family: var(--osa-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+#check-footer .verdict.go {
+  color: var(--osa-good);
+}
+
+#check-footer .verdict.no-go {
+  color: var(--osa-fail);
+}
+
+/* --------------------------------------------------------------------------
+   Tutorial (spec §46, §47, §48)
+   -------------------------------------------------------------------------- */
+
+#tutorial {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(620px, 92vw);
+  z-index: 75;
+  display: none;
+}
+
+#tutorial.visible {
+  display: block;
+}
+
+#tutorial .head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 17px 8px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+#tutorial .step-no {
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--osa-accent);
+}
+
+#tutorial .head .title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--osa-text-bright);
+  flex: 1;
+}
+
+#tutorial .body {
+  padding: 13px 17px;
+  font-size: 13px;
+  line-height: 1.62;
+  color: var(--osa-text);
+}
+
+#tutorial .body em {
+  color: var(--osa-accent);
+  font-style: normal;
+  font-weight: 600;
+}
+
+#tutorial .concept {
+  margin-top: 11px;
+  padding: 10px 13px;
+  border-left: 2px solid var(--osa-accent);
+  background: rgba(20, 46, 66, 0.5);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--osa-text-dim);
+}
+
+#tutorial .concept strong {
+  color: var(--osa-text-bright);
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+#tutorial .foot {
+  padding: 10px 17px;
+  border-top: 1px solid var(--osa-line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#tutorial .objective {
+  flex: 1;
+  font-family: var(--osa-mono);
+  font-size: 10.5px;
+  color: var(--osa-warn);
+  letter-spacing: 0.05em;
+}
+
+#tutorial .objective.done {
+  color: var(--osa-good);
+}
+
+/* Duck portrait beside the tutorial text, so the characters teach it */
+#tutorial .who {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--osa-line-strong);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  background: rgba(30, 52, 72, 0.7);
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Diagnostics overlay (spec §15, §16, §48)
+   -------------------------------------------------------------------------- */
+
+#diagnostics {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  padding: 12px 15px;
+  width: 216px;
+  display: none;
+}
+
+#diagnostics.visible {
+  display: block;
+}
+
+#diagnostics .head {
+  font-family: var(--osa-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--osa-accent);
+  padding-bottom: 8px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--osa-line);
+}
+
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  font-family: var(--osa-mono);
+  font-size: 10.5px;
+}
+
+.diag-row .k {
+  color: var(--osa-text-dim);
+}
+
+.diag-row .v {
+  color: var(--osa-text-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-row .v.good {
+  color: var(--osa-good);
+}
+
+.diag-row .v.bad {
+  color: var(--osa-fail);
+}
+
+/* Aerodynamic rows outside the atmosphere: shown, but not asserted. */
+.diag-row .v.muted {
+  color: var(--osa-text-dim);
+}
+
+.diag-legend {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--osa-line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diag-legend .item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--osa-mono);
+  font-size: 9px;
+  color: var(--osa-text-dim);
+}
+
+.diag-legend .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* --------------------------------------------------------------------------
+   Mission result (spec §38, §52)
+   -------------------------------------------------------------------------- */
+
+#result {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  z-index: 85;
+  background: radial-gradient(ellipse at center, rgba(4, 8, 14, 0.5), rgba(4, 8, 14, 0.92));
+}
+
+#result.visible {
+  display: grid;
+}
+
+#result .card {
+  width: min(620px, 90vw);
+  padding: 30px 34px;
+  text-align: left;
+}
+
+#result .verdict {
+  font-family: var(--osa-mono);
+  font-size: 26px;
+  letter-spacing: 0.24em;
+  margin-bottom: 6px;
+}
+
+#result .verdict.good {
+  color: var(--osa-good);
+}
+
+#result .verdict.bad {
+  color: var(--osa-fail);
+}
+
+#result .headline {
+  font-size: 16px;
+  color: var(--osa-text-bright);
+  margin-bottom: 14px;
+}
+
+#result .explanation {
+  font-size: 13px;
+  line-height: 1.68;
+  color: var(--osa-text-dim);
+  padding: 13px 15px;
+  border-left: 2px solid var(--osa-line-strong);
+  background: rgba(16, 28, 40, 0.6);
+}
+
+#result .stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 18px 0;
+}
+
+#result .actions {
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Main menu
+   -------------------------------------------------------------------------- */
+
+/*
+ * The title screen sits *over* the 3D title vignette rather than replacing it,
+ * so the first thing on screen is the two characters (spec §24, §78). The panel
+ * is therefore anchored to one side and the page is only darkened enough behind
+ * the text to keep it legible — never enough to hide the shot.
+ */
+#menu {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 95;
+  background:
+    linear-gradient(90deg, rgba(4, 7, 12, 0) 34%, rgba(4, 7, 12, 0.62) 58%, rgba(4, 7, 12, 0.9) 100%),
+    linear-gradient(0deg, rgba(4, 7, 12, 0.55) 0%, rgba(4, 7, 12, 0) 42%);
+}
+
+#menu.hidden {
+  display: none;
+}
+
+#menu .inner {
+  text-align: left;
+  width: min(560px, 52vw);
+  padding: 0 clamp(24px, 4vw, 64px) 0 0;
+  margin-right: clamp(12px, 3vw, 48px);
+}
+
+#menu h1 {
+  font-family: var(--osa-mono);
+  font-size: 34px;
+  letter-spacing: 0.36em;
+  font-weight: 300;
+  margin: 0 0 6px;
+  color: #fff;
+}
+
+#menu .agency {
+  font-family: var(--osa-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  color: var(--osa-accent);
+  margin-bottom: 26px;
+}
+
+#menu .blurb {
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--osa-text-dim);
+  margin-bottom: 30px;
+}
+
+#mission-select {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 22px;
+}
+
+.mission-card {
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--osa-line);
+  border-radius: 3px;
+  background: rgba(12, 22, 34, 0.7);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mission-card:hover {
+  border-color: var(--osa-accent);
+  background: rgba(20, 40, 58, 0.8);
+}
+
+.mission-card .nm {
+  font-family: var(--osa-mono);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  color: var(--osa-text-bright);
+}
+
+.mission-card .sub {
+  font-size: 11px;
+  color: var(--osa-accent);
+  margin-top: 3px;
+}
+
+.mission-card .desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--osa-text-dim);
+  margin-top: 7px;
+}
+
+#menu .hint {
+  font-family: var(--osa-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--osa-text-dim);
+  opacity: 0.65;
+}
+
+/* --------------------------------------------------------------------------
+   Loading
+   -------------------------------------------------------------------------- */
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 99;
+  background: var(--osa-void);
+}
+
+#loading.hidden {
+  display: none;
+}
+
+#loading .inner {
+  text-align: center;
+}
+
+#loading .bar {
+  width: 240px;
+  height: 2px;
+  background: rgba(120, 170, 210, 0.18);
+  margin: 18px auto 0;
+  overflow: hidden;
+}
+
+#loading .bar .fill {
+  height: 100%;
+  width: 30%;
+  background: var(--osa-accent);
+  animation: load-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes load-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbars
+   -------------------------------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 170, 210, 0.22);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 170, 210, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: keep the 3D view dominant on small screens
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  #build-ui {
+    grid-template-columns: 244px 1fr 262px;
+  }
+
+  #menu h1 {
+    font-size: 26px;
+    letter-spacing: 0.26em;
+  }
+}
+
+@media (max-width: 780px) {
+  #build-ui {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  #vehicle-panel {
+    max-height: 42vh;
+  }
+
+  #telemetry {
+    grid-template-columns: 1fr;
+  }
+
+  #countdown {
+    font-size: 76px;
+  }
+}

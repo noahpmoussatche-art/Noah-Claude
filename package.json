@@ -1,0 +1,25 @@
+{
+  "name": "orbital-engineering",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ORBITAL ENGINEERING 3D \u2014 a space construction and exploration simulator",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "bundle": "node tools/bundle-single-file.mjs",
+    "check:file": "node tools/file-check.mjs",
+    "check:shaders": "node tools/shader-check.mjs"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "playwright": "^1.62.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

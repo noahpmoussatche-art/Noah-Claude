@@ -1,0 +1,60 @@
+# Builds the game and publishes it to GitHub Pages.
+#
+# The game is entirely static — no server, no API, no database — so hosting it
+# is just a matter of serving the contents of dist/. Vite is configured with
+# `base: './'`, which keeps every asset reference relative, so the build works
+# unchanged whether it is served from a domain root or from a project
+# subdirectory like /Noah-Claude/.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you publish from any branch by hand, via the Actions tab, which is
+  # useful for previewing a change before it is merged.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue them instead. `cancel-in-progress: false`
+# because a half-finished deploy that gets cancelled can leave the site broken.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly what the
+      # lockfile pins, so a deploy cannot quietly pick up a different version
+      # of three.js than the one the game was tested against.
+      - run: npm ci
+
+      # `npm run build` runs `tsc --noEmit` first, so a type error fails the
+      # deploy rather than shipping.
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
